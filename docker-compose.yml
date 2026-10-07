@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # 1. Persistent MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: fitbite-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: fitbite_db
+      MYSQL_USER: fitbite_user
+      MYSQL_PASSWORD: fitbite_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/seeds/seed_data.sql:/docker-entrypoint-initdb.d/02_seeds.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fitbite-network
+
+  # 2. Java Spring Boot Meal Planning Engine
+  meal-planner-service:
+    build:
+      context: ./meal-planner-service
+      dockerfile: Dockerfile
+    container_name: fitbite-meal-planner
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      SPRING_PROFILES_ACTIVE: prod
+    networks:
+      - fitbite-network
+
+  # 3. Node.js Express Core Backend & Commerce Engine
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fitbite-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: fitbite_user
+      DB_PASSWORD: fitbite_password
+      DB_NAME: fitbite_db
+      JWT_SECRET: fitbite_super_secret_jwt_key_2026_production
+      JAVA_PLANNER_URL: http://meal-planner-service:8082
+      ENABLE_LOCAL_JSON_FALLBACK: "true"
+      CLIENT_URL: http://localhost:3000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      meal-planner-service:
+        condition: service_started
+    networks:
+      - fitbite-network
+
+  # 4. React + Vite Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fitbite-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - fitbite-network
+
+networks:
+  fitbite-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

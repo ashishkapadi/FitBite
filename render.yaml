@@ -1,0 +1,68 @@
+services:
+  # ----------------------------------------------------------------------------
+  # 1. FitBite Node.js / Express Core Commerce Backend & Real-Time Engine
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: fitbite-api
+    runtime: node
+    rootDir: backend
+    plan: starter
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm run db:migrate && node src/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: fitbite-uploads
+      mountPath: /var/data/uploads
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: CLIENT_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: ENABLE_LOCAL_JSON_FALLBACK
+        value: "false"
+      - key: JAVA_MEAL_PLANNER_URL
+        fromService:
+          type: web
+          name: fitbite-meal-planner
+          property: host
+      - key: STORAGE_PROVIDER
+        value: local
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: PAYMENT_PROVIDER_MODE
+        value: demo
+
+  # ----------------------------------------------------------------------------
+  # 2. FitBite Java / Spring Boot Meal Planner Microservice
+  # ----------------------------------------------------------------------------
+  - type: web
+    name: fitbite-meal-planner
+    runtime: docker
+    rootDir: meal-planner-service
+    dockerfilePath: Dockerfile
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8082
+      - key: JAVA_OPTS
+        value: "-Xmx384m -Xms128m"
+      - key: FITBITE_PLANNER_RULES_ENABLED
+        value: "true"

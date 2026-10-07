@@ -1,0 +1,23 @@
+{
+  "name": "fitbite",
+  "version": "1.0.0",
+  "description": "FitBite - Your meals, your way. End-to-end food delivery, tiffin subscriptions & personalized nutrition platform.",
+  "scripts": {
+    "start:backend": "node backend/src/server.js",
+    "start:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "test:backend": "node --test backend/test/businessRules.test.js",
+    "seed:mysql": "mysql -u fitbite_user -pfitbite_password fitbite_db < database/seeds/seed_data.sql"
+  },
+  "keywords": [
+    "food-delivery",
+    "tiffin-subscriptions",
+    "nutrition-planner",
+    "react",
+    "node",
+    "spring-boot",
+    "mysql"
+  ],
+  "author": "FitBite Engineering",
+  "license": "ISC"
+}

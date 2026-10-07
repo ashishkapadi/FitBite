@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Java Maven Build outputs
+target/
+*.jar
+*.war
+*.ear
+*.class
+
+# Production Build outputs
+dist/
+build/
+out/
+.next/
+
+# Environment Variables & Secrets (Keep .env.example safe)
+.env
+.env.*
+!.env.example
+*.local
+
+# Vercel Deployment Artifacts
+.vercel
+
+# Logs and runtime caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+.eslintcache
+
+# Local Persistent Relational Store & Uploads
+backend/data/*.json
+backend/uploads/
+uploads/
+
+# IDE & OS Caches
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
