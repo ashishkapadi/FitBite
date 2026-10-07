@@ -49,3 +49,4 @@ uploads/
 *.sw?
 .DS_Store
 Thumbs.db
+*.exe
