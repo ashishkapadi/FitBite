@@ -74,8 +74,18 @@ describe('FitBite Business Rules & Integrity Tests', () => {
 
   test('Role Isolation: Unlisted/pending sellers are excluded from public catalog', async () => {
     await db.init();
-    const pendingSellers = await db.find('seller_profiles', { verification_status: 'pending_approval' });
-    assert.ok(pendingSellers.length > 0, 'There should be at least 1 demonstration pending seller');
+    let pendingSellers = await db.find('seller_profiles', { verification_status: 'pending_approval' });
+    if (pendingSellers.length === 0) {
+      await db.insert('seller_profiles', {
+        id: `seller_pending_test_${Date.now()}`,
+        user_id: 'user_pending_test',
+        business_name: 'Pending Kitchen Test',
+        verification_status: 'pending_approval',
+        is_listed: false
+      });
+      pendingSellers = await db.find('seller_profiles', { verification_status: 'pending_approval' });
+    }
+    assert.ok(pendingSellers.length > 0, 'There should be at least 1 pending seller');
 
     const pendingSellerId = pendingSellers[0].id;
     const publicSellers = await db.find('seller_profiles', s => s.verification_status === 'approved' && s.is_listed);
