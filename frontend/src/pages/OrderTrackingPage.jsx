@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
-import { SOCKET_URL } from '../config/api';
+import { SOCKET_URL, apiFetch, safeJson } from '../config/api';
 import ImageWithFallback from '../components/ImageWithFallback';
 import { 
   CheckCircle, 
@@ -72,20 +72,16 @@ export default function OrderTrackingPage() {
   const fetchOrderAndTracking = async () => {
     try {
       const [trackRes, orderRes] = await Promise.all([
-        fetch(`/api/tracking/${orderId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`/api/orders/${orderId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        apiFetch(`/api/tracking/${orderId}`),
+        apiFetch(`/api/orders/${orderId}`)
       ]);
 
       if (!trackRes.ok || !orderRes.ok) {
         throw new Error('Order tracking information could not be retrieved.');
       }
 
-      const trackJson = await trackRes.json();
-      const orderJson = await orderRes.json();
+      const trackJson = await safeJson(trackRes);
+      const orderJson = await safeJson(orderRes);
 
       setTrackingData(trackJson);
       setOrderDetails(orderJson);
@@ -103,12 +99,8 @@ export default function OrderTrackingPage() {
   const handleSimulateStep = async () => {
     setSimulating(true);
     try {
-      const res = await fetch('/api/tracking/simulate-step', {
+      const res = await apiFetch('/api/tracking/simulate-step', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ order_id: orderId })
       });
       if (res.ok) {
@@ -124,15 +116,11 @@ export default function OrderTrackingPage() {
   const handleCancelOrder = async () => {
     if (!window.confirm('Are you sure you want to cancel this order? Cancellations are only permitted before the kitchen starts preparation.')) return;
     try {
-      const res = await fetch(`/api/orders/${orderId}/cancel`, {
+      const res = await apiFetch(`/api/orders/${orderId}/cancel`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ reason: 'Customer requested cancellation' })
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) {
         alert(data.error || 'Failed to cancel order');
       } else {
@@ -148,12 +136,8 @@ export default function OrderTrackingPage() {
     e.preventDefault();
     setSubmittingReview(true);
     try {
-      const res = await fetch(`/api/orders/${orderId}/review`, {
+      const res = await apiFetch(`/api/orders/${orderId}/review`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           rating,
           comment: reviewComment
@@ -163,8 +147,8 @@ export default function OrderTrackingPage() {
         setReviewSubmitted(true);
         fetchOrderAndTracking();
       } else {
-        const data = await res.json();
-        alert(data.error || 'Could not submit review');
+        const data = await safeJson(res);
+        alert(data.error || 'Failed to submit review');
       }
     } catch (err) {
       alert('Error submitting review');

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
+import { apiFetch, safeJson } from '../config/api';
 import { 
   Sparkles, 
   Calendar, 
@@ -14,9 +15,9 @@ import {
   ShoppingBag, 
   ArrowRight, 
   ChevronRight, 
-  Info,
-  Sliders,
-  DollarSign
+  Info, 
+  Sliders, 
+  DollarSign 
 } from 'lucide-react';
 
 export default function MealPlannerPage() {
@@ -52,9 +53,8 @@ export default function MealPlannerPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/meal-plans/generate', {
+      const response = await apiFetch('/api/meal-plans/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           goal,
           dietaryPreference,
@@ -72,7 +72,7 @@ export default function MealPlannerPage() {
         throw new Error('Failed to generate meal plan from planner service');
       }
 
-      const data = await response.json();
+      const data = await safeJson(response);
       setPlanData(data);
     } catch (err) {
       console.error('Error generating meal plan:', err);

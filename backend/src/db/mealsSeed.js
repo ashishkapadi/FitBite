@@ -23,7 +23,7 @@ export const SEED_MEALS = [
     protein_grams: 6.5,
     carbs_grams: 48.0,
     fat_grams: 7.2,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_001.jpg',
     rating: 4.8,
     rating_count: 85
   },
@@ -73,7 +73,7 @@ export const SEED_MEALS = [
     protein_grams: 7.2,
     carbs_grams: 54.0,
     fat_grams: 6.5,
-    image_url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_003.jpg',
     rating: 4.6,
     rating_count: 62
   },
@@ -123,7 +123,7 @@ export const SEED_MEALS = [
     protein_grams: 12.0,
     carbs_grams: 58.0,
     fat_grams: 7.5,
-    image_url: 'https://images.unsplash.com/photo-1517673132405-a56a62b18caf?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_005.jpg',
     rating: 4.7,
     rating_count: 94
   },
@@ -200,7 +200,7 @@ export const SEED_MEALS = [
     protein_grams: 15.0,
     carbs_grams: 90.0,
     fat_grams: 11.0,
-    image_url: 'https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_008.jpg',
     rating: 4.8,
     rating_count: 145
   },
@@ -252,7 +252,7 @@ export const SEED_MEALS = [
     protein_grams: 18.0,
     carbs_grams: 84.0,
     fat_grams: 7.5,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_010.jpg',
     rating: 4.8,
     rating_count: 290
   },
@@ -302,7 +302,7 @@ export const SEED_MEALS = [
     protein_grams: 19.0,
     carbs_grams: 74.0,
     fat_grams: 24.0,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_012.jpg',
     rating: 4.9,
     rating_count: 360
   },
@@ -327,7 +327,7 @@ export const SEED_MEALS = [
     protein_grams: 21.0,
     carbs_grams: 58.0,
     fat_grams: 18.0,
-    image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_013.jpg',
     rating: 4.7,
     rating_count: 175
   },
@@ -379,7 +379,7 @@ export const SEED_MEALS = [
     protein_grams: 10.0,
     carbs_grams: 56.0,
     fat_grams: 9.5,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_015.jpg',
     rating: 4.8,
     rating_count: 140
   },
@@ -404,7 +404,7 @@ export const SEED_MEALS = [
     protein_grams: 14.0,
     carbs_grams: 74.0,
     fat_grams: 12.0,
-    image_url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_016.jpg',
     rating: 4.7,
     rating_count: 115
   },
@@ -431,7 +431,7 @@ export const SEED_MEALS = [
     protein_grams: 15.0,
     carbs_grams: 72.0,
     fat_grams: 14.5,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_017.jpg',
     rating: 4.9,
     rating_count: 260
   },
@@ -456,7 +456,7 @@ export const SEED_MEALS = [
     protein_grams: 16.5,
     carbs_grams: 78.0,
     fat_grams: 9.0,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_018.jpg',
     rating: 4.8,
     rating_count: 155
   },
@@ -481,7 +481,7 @@ export const SEED_MEALS = [
     protein_grams: 13.5,
     carbs_grams: 74.0,
     fat_grams: 10.0,
-    image_url: 'https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1596560548464-f010549b84d7?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     rating_count: 190
   },
@@ -610,7 +610,7 @@ export const SEED_MEALS = [
     protein_grams: 17.0,
     carbs_grams: 62.0,
     fat_grams: 11.5,
-    image_url: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 190
   },
@@ -635,7 +635,7 @@ export const SEED_MEALS = [
     protein_grams: 16.0,
     carbs_grams: 56.0,
     fat_grams: 14.0,
-    image_url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1529059997568-3d847b1154f0?auto=format&fit=crop&w=800&q=80',
     rating: 4.7,
     rating_count: 130
   },
@@ -662,7 +662,7 @@ export const SEED_MEALS = [
     protein_grams: 22.0,
     carbs_grams: 68.0,
     fat_grams: 26.0,
-    image_url: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     rating_count: 410
   },
@@ -687,7 +687,7 @@ export const SEED_MEALS = [
     protein_grams: 9.5,
     carbs_grams: 62.0,
     fat_grams: 9.0,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_027.jpg',
     rating: 4.7,
     rating_count: 112
   },
@@ -714,7 +714,7 @@ export const SEED_MEALS = [
     protein_grams: 22.0,
     carbs_grams: 56.0,
     fat_grams: 14.5,
-    image_url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 175
   },
@@ -739,7 +739,7 @@ export const SEED_MEALS = [
     protein_grams: 26.0,
     carbs_grams: 58.0,
     fat_grams: 7.5,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1574484284002-952d92456975?auto=format&fit=crop&w=800&q=80',
     rating: 4.6,
     rating_count: 88
   },
@@ -766,7 +766,7 @@ export const SEED_MEALS = [
     protein_grams: 19.5,
     carbs_grams: 58.0,
     fat_grams: 16.0,
-    image_url: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 215
   },
@@ -791,7 +791,7 @@ export const SEED_MEALS = [
     protein_grams: 22.0,
     carbs_grams: 52.0,
     fat_grams: 21.0,
-    image_url: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_031.jpg',
     rating: 4.8,
     rating_count: 180
   },
@@ -818,7 +818,7 @@ export const SEED_MEALS = [
     protein_grams: 34.0,
     carbs_grams: 62.0,
     fat_grams: 17.0,
-    image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     rating_count: 340
   },
@@ -843,7 +843,7 @@ export const SEED_MEALS = [
     protein_grams: 31.0,
     carbs_grams: 64.0,
     fat_grams: 12.5,
-    image_url: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_033.jpg',
     rating: 4.8,
     rating_count: 145
   },
@@ -870,7 +870,7 @@ export const SEED_MEALS = [
     protein_grams: 21.0,
     carbs_grams: 54.0,
     fat_grams: 25.0,
-    image_url: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 160
   },
@@ -895,7 +895,7 @@ export const SEED_MEALS = [
     protein_grams: 14.0,
     carbs_grams: 65.0,
     fat_grams: 7.5,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     rating_count: 125
   },
@@ -972,7 +972,7 @@ export const SEED_MEALS = [
     protein_grams: 13.0,
     carbs_grams: 66.0,
     fat_grams: 7.0,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_038.jpg',
     rating: 4.8,
     rating_count: 210
   },
@@ -999,7 +999,7 @@ export const SEED_MEALS = [
     protein_grams: 11.0,
     carbs_grams: 76.0,
     fat_grams: 7.5,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1567337710282-00832b415979?auto=format&fit=crop&w=800&q=80',
     rating: 4.7,
     rating_count: 98
   },
@@ -1024,7 +1024,7 @@ export const SEED_MEALS = [
     protein_grams: 12.0,
     carbs_grams: 72.0,
     fat_grams: 17.5,
-    image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_040.jpg',
     rating: 4.8,
     rating_count: 142
   },
@@ -1051,7 +1051,7 @@ export const SEED_MEALS = [
     protein_grams: 14.0,
     carbs_grams: 38.0,
     fat_grams: 2.0,
-    image_url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1607532941433-304659e8198a?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 185
   },
@@ -1076,7 +1076,7 @@ export const SEED_MEALS = [
     protein_grams: 13.5,
     carbs_grams: 42.0,
     fat_grams: 16.0,
-    image_url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=800&q=80',
     rating: 4.7,
     rating_count: 120
   },
@@ -1103,7 +1103,7 @@ export const SEED_MEALS = [
     protein_grams: 18.0,
     carbs_grams: 48.0,
     fat_grams: 16.5,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 220
   },
@@ -1180,7 +1180,7 @@ export const SEED_MEALS = [
     protein_grams: 6.0,
     carbs_grams: 48.0,
     fat_grams: 16.0,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_046.jpg',
     rating: 4.8,
     rating_count: 140
   },
@@ -1207,7 +1207,7 @@ export const SEED_MEALS = [
     protein_grams: 82.0,
     carbs_grams: 280.0,
     fat_grams: 88.0,
-    image_url: 'https://images.unsplash.com/photo-1610057099431-d73a1c9d2f2f?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     rating_count: 480
   },
@@ -1232,7 +1232,7 @@ export const SEED_MEALS = [
     protein_grams: 64.0,
     carbs_grams: 290.0,
     fat_grams: 62.0,
-    image_url: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 295
   },
@@ -1257,7 +1257,7 @@ export const SEED_MEALS = [
     protein_grams: 48.0,
     carbs_grams: 230.0,
     fat_grams: 38.0,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1625398407796-82650a8c135f?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 210
   },
@@ -1309,7 +1309,7 @@ export const SEED_MEALS = [
     protein_grams: 1.5,
     carbs_grams: 28.0,
     fat_grams: 0.2,
-    image_url: 'https://images.unsplash.com/photo-1613478223719-2ab802602423?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_051.jpg',
     rating: 4.8,
     rating_count: 160
   },
@@ -1361,7 +1361,7 @@ export const SEED_MEALS = [
     protein_grams: 5.5,
     carbs_grams: 34.0,
     fat_grams: 6.0,
-    image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_053.jpg',
     rating: 4.8,
     rating_count: 185
   },
@@ -1386,7 +1386,7 @@ export const SEED_MEALS = [
     protein_grams: 8.0,
     carbs_grams: 58.0,
     fat_grams: 9.0,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_054.jpg',
     rating: 4.9,
     rating_count: 220
   },
@@ -1413,7 +1413,7 @@ export const SEED_MEALS = [
     protein_grams: 14.0,
     carbs_grams: 72.0,
     fat_grams: 12.0,
-    image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1574653853027-5382a3d23a15?auto=format&fit=crop&w=800&q=80',
     rating: 4.7,
     rating_count: 145
   },
@@ -1438,7 +1438,7 @@ export const SEED_MEALS = [
     protein_grams: 30.0,
     carbs_grams: 42.0,
     fat_grams: 10.0,
-    image_url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 110
   },
@@ -1463,7 +1463,7 @@ export const SEED_MEALS = [
     protein_grams: 23.0,
     carbs_grams: 64.0,
     fat_grams: 24.5,
-    image_url: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_057.jpg',
     rating: 4.8,
     rating_count: 195
   },
@@ -1488,7 +1488,7 @@ export const SEED_MEALS = [
     protein_grams: 8.5,
     carbs_grams: 34.0,
     fat_grams: 9.5,
-    image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_058.jpg',
     rating: 4.9,
     rating_count: 170
   },
@@ -1513,7 +1513,7 @@ export const SEED_MEALS = [
     protein_grams: 19.5,
     carbs_grams: 56.0,
     fat_grams: 21.0,
-    image_url: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_059.jpg',
     rating: 4.7,
     rating_count: 110
   },
@@ -1538,7 +1538,7 @@ export const SEED_MEALS = [
     protein_grams: 11.0,
     carbs_grams: 44.0,
     fat_grams: 18.0,
-    image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=800&q=80',
+    image_url: '/images/meals/meal_060.jpg',
     rating: 4.8,
     rating_count: 215
   },
@@ -1563,7 +1563,7 @@ export const SEED_MEALS = [
     protein_grams: 34.0,
     carbs_grams: 46.0,
     fat_grams: 11.0,
-    image_url: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=800&q=80',
     rating: 4.9,
     rating_count: 165
   },
@@ -1588,7 +1588,7 @@ export const SEED_MEALS = [
     protein_grams: 38.0,
     carbs_grams: 185.0,
     fat_grams: 36.0,
-    image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=800&q=80',
+    image_url: 'https://images.unsplash.com/photo-1630383249896-424e482df921?auto=format&fit=crop&w=800&q=80',
     rating: 4.8,
     rating_count: 140
   }

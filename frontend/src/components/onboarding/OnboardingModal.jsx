@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { apiFetch, safeJson } from '../../config/api';
 import { CheckCircle2, ChevronRight, ChevronLeft, Sparkles, Dumbbell, Coffee, Calendar, Users, User } from 'lucide-react';
 
 export function OnboardingModal() {
@@ -62,18 +63,13 @@ export function OnboardingModal() {
         }
       };
 
-      const token = localStorage.getItem('fitbite_token');
-      const res = await fetch('/api/onboarding/complete', {
+      const res = await apiFetch('/api/onboarding/complete', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         completeOnboardingSuccess(data.profile, data.preferences);
       }
     } catch (err) {

@@ -9,7 +9,7 @@
     "dev": "node --watch src/server.js",
     "db:migrate": "node src/db/migrate.js",
     "seed": "node src/db/seedRunner.js",
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test --test-concurrency=1 test/**/*.test.js"
   },
   "keywords": ["food-delivery", "tiffin", "meal-planner", "express", "mysql"],
   "author": "FitBite Engineering",

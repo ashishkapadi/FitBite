@@ -19,6 +19,15 @@ describe('FitBite Comprehensive Edge Cases Suite', () => {
   let otherKitchenMeal = null;
 
   before(async () => {
+    try {
+      const probe = await fetch('http://localhost:5000/health').catch(() => null);
+      if (!probe || !probe.ok) {
+        await import('../src/server.js');
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    } catch (e) {
+      console.warn('Server initialization in test:', e.message);
+    }
     await db.init();
 
     // 1. Authenticate Customer

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
+import { apiFetch, safeJson } from '../config/api';
 import { 
   Calendar, 
   Clock, 
@@ -59,11 +60,11 @@ export default function SubscriptionsPage() {
 
   const fetchPlans = async () => {
     try {
-      const res = await fetch('/api/subscriptions/plans');
+      const res = await apiFetch('/api/subscriptions/plans');
       if (res.ok) {
-        const data = await res.json();
-        setPlans(data);
-        if (data.length > 0) {
+        const data = await safeJson(res);
+        setPlans(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) {
           setSelectedPlanId(data[0].id);
         }
       }
@@ -74,15 +75,10 @@ export default function SubscriptionsPage() {
 
   const fetchMySubscriptions = async () => {
     try {
-      const res = await fetch('/api/subscriptions/my', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch('/api/subscriptions/my');
       if (res.ok) {
-        const data = await res.json();
-        setMySubscriptions(data);
-        if (data.length > 0 && activeTab === 'browse' && !selectedCalendarSubId) {
-          // If user already has subscriptions, offer quick view
-        }
+        const data = await safeJson(res);
+        setMySubscriptions(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Error fetching my subscriptions:', err);
@@ -91,13 +87,11 @@ export default function SubscriptionsPage() {
 
   const fetchAddresses = async () => {
     try {
-      const res = await fetch('/api/users/addresses', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch('/api/users/addresses');
       if (res.ok) {
-        const data = await res.json();
-        setAddresses(data);
-        if (data.length > 0) {
+        const data = await safeJson(res);
+        setAddresses(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) {
           setSelectedAddressId(data[0].id);
         }
       }
@@ -115,9 +109,8 @@ export default function SubscriptionsPage() {
   const calculatePrePurchase = async () => {
     setCalculating(true);
     try {
-      const res = await fetch('/api/subscriptions/calculate', {
+      const res = await apiFetch('/api/subscriptions/calculate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan_id: selectedPlanId,
           slot: selectedSlot,
@@ -125,7 +118,7 @@ export default function SubscriptionsPage() {
         })
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         setCalculation(data);
       }
     } catch (err) {
@@ -139,11 +132,9 @@ export default function SubscriptionsPage() {
     setSelectedCalendarSubId(subId);
     setCalendarLoading(true);
     try {
-      const res = await fetch(`/api/subscriptions/${subId}/calendar`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch(`/api/subscriptions/${subId}/calendar`);
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         setCalendarData(data);
       }
     } catch (err) {
@@ -156,18 +147,14 @@ export default function SubscriptionsPage() {
   const handleSkipRequest = async (deliveryId) => {
     if (!window.confirm('Request skip for this scheduled meal? If eligible, your subscription end date will be extended by 1 day.')) return;
     try {
-      const res = await fetch(`/api/subscriptions/${selectedCalendarSubId}/skip`, {
+      const res = await apiFetch(`/api/subscriptions/${selectedCalendarSubId}/skip`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           delivery_id: deliveryId,
           reason: 'Out of town / Personal change'
         })
       });
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) {
         alert(data.error || 'Could not skip delivery');
       } else {
@@ -182,7 +169,7 @@ export default function SubscriptionsPage() {
 
   const handleSubscribe = async () => {
     if (!user) {
-      openAuthModal('customer', () => handleSubscribe());
+      openAuthModal({ mode: 'signin', accountType: 'customer', action: () => handleSubscribe() });
       return;
     }
 
@@ -194,12 +181,8 @@ export default function SubscriptionsPage() {
         return;
       }
       try {
-        const addRes = await fetch('/api/users/addresses', {
+        const addRes = await apiFetch('/api/users/addresses', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
           body: JSON.stringify({
             address_line1: newAddressText,
             city: 'Mumbai',
@@ -207,7 +190,7 @@ export default function SubscriptionsPage() {
             address_type: 'Home'
           })
         });
-        const addData = await addRes.json();
+        const addData = await safeJson(addRes);
         if (addData.id) {
           addressIdToUse = addData.id;
         }
@@ -219,12 +202,8 @@ export default function SubscriptionsPage() {
 
     setSubscribing(true);
     try {
-      const res = await fetch('/api/subscriptions/create', {
+      const res = await apiFetch('/api/subscriptions/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           plan_id: selectedPlanId,
           address_id: addressIdToUse,
@@ -234,7 +213,7 @@ export default function SubscriptionsPage() {
         })
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) {
         alert(data.error || 'Failed to activate subscription');
       } else {

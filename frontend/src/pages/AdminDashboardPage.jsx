@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch, safeJson } from '../config/api';
 import { 
   ShieldCheck, 
   Users, 
@@ -11,9 +12,9 @@ import {
   XCircle, 
   RefreshCw, 
   FileText, 
-  Search,
-  Lock,
-  RotateCcw
+  Search, 
+  Lock, 
+  RotateCcw 
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -61,28 +62,40 @@ export default function AdminDashboardPage() {
   };
 
   const fetchMetrics = async () => {
-    const res = await fetch('/api/admin/metrics', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setMetrics(await res.json());
+    const res = await apiFetch('/api/admin/metrics');
+    if (res.ok) setMetrics(await safeJson(res));
   };
 
   const fetchSellers = async () => {
-    const res = await fetch('/api/admin/sellers', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setSellers(await res.json());
+    const res = await apiFetch('/api/admin/sellers');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setSellers(Array.isArray(data) ? data : []);
+    }
   };
 
   const fetchUsers = async () => {
-    const res = await fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setUsersList(await res.json());
+    const res = await apiFetch('/api/admin/users');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setUsersList(Array.isArray(data) ? data : []);
+    }
   };
 
   const fetchOrders = async () => {
-    const res = await fetch('/api/admin/orders', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setOrdersList(await res.json());
+    const res = await apiFetch('/api/admin/orders');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setOrdersList(Array.isArray(data) ? data : []);
+    }
   };
 
   const fetchAuditLogs = async () => {
-    const res = await fetch('/api/admin/audit-logs', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setAuditLogs(await res.json());
+    const res = await apiFetch('/api/admin/audit-logs');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setAuditLogs(Array.isArray(data) ? data : []);
+    }
   };
 
   const handleVerifySeller = async (sellerId, action) => {
@@ -93,12 +106,8 @@ export default function AdminDashboardPage() {
     }
 
     try {
-      const res = await fetch(`/api/admin/sellers/${sellerId}/verify`, {
+      const res = await apiFetch(`/api/admin/sellers/${sellerId}/verify`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ action, rejection_reason: rejectionReason })
       });
       if (res.ok) {
@@ -107,7 +116,7 @@ export default function AdminDashboardPage() {
         fetchAuditLogs();
         alert(`Seller status successfully updated!`);
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         alert(data.error || 'Failed to update seller');
       }
     } catch (err) {
@@ -117,19 +126,15 @@ export default function AdminDashboardPage() {
 
   const handleToggleUserStatus = async (userId, currentActive) => {
     try {
-      const res = await fetch(`/api/admin/users/${userId}/status`, {
+      const res = await apiFetch(`/api/admin/users/${userId}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ is_active: !currentActive })
       });
       if (res.ok) {
         fetchUsers();
         fetchAuditLogs();
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         alert(data.error || 'Failed to update user status');
       }
     } catch (err) {
@@ -142,12 +147,8 @@ export default function AdminDashboardPage() {
     if (!reason) return;
 
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}/refund`, {
+      const res = await apiFetch(`/api/admin/orders/${orderId}/refund`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ reason })
       });
       if (res.ok) {
@@ -156,7 +157,7 @@ export default function AdminDashboardPage() {
         fetchMetrics();
         fetchAuditLogs();
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         alert(data.error || 'Failed to process refund');
       }
     } catch (err) {

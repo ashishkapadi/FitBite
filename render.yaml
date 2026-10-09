@@ -9,7 +9,7 @@ services:
     plan: starter
     region: oregon
     buildCommand: npm install
-    startCommand: npm run db:migrate && node src/server.js
+    startCommand: node src/server.js
     healthCheckPath: /health
     autoDeploy: true
     disk:
@@ -22,19 +22,17 @@ services:
       - key: PORT
         value: 5000
       - key: CLIENT_URL
-        sync: false
+        value: https://frontend-ashen-nine-e4ten1ains.vercel.app
       - key: ALLOWED_ORIGINS
-        sync: false
+        value: https://frontend-ashen-nine-e4ten1ains.vercel.app,http://localhost:5173
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: DATABASE_URL
         sync: false
-      - key: DB_SSL
-        value: "true"
       - key: ENABLE_LOCAL_JSON_FALLBACK
-        value: "false"
+        value: "true"
       - key: JAVA_MEAL_PLANNER_URL
         fromService:
           type: web

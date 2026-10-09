@@ -5,7 +5,19 @@
  * In Vercel production: Set VITE_API_BASE_URL to your backend host (e.g. 'https://api.fitbite.app/api' or 'https://fitbite-api.onrender.com/api')
  */
 
-const rawApiBase = (import.meta.env.VITE_API_BASE_URL || '/api').trim();
+const getApiBase = () => {
+  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim()) {
+    return import.meta.env.VITE_API_BASE_URL.trim();
+  }
+  // If hosted on Vercel / remote production and VITE_API_BASE_URL wasn't provided at build time,
+  // point to the official FitBite Render backend
+  if (typeof window !== 'undefined' && window.location.hostname && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+    return 'https://fitbite.onrender.com/api';
+  }
+  return '/api';
+};
+
+const rawApiBase = getApiBase();
 export const API_BASE_URL = rawApiBase.replace(/\/+$/, '');
 
 export const SOCKET_URL = 
@@ -110,14 +122,25 @@ export async function apiFetch(path, options = {}) {
     delete headers['Content-Type'];
   }
 
+  const timeoutMs = options.timeout || 15000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = options.signal || controller.signal;
+
   try {
     const response = await fetch(url, {
       ...options,
+      signal,
       headers,
       credentials: options.credentials || 'include'
     });
+    clearTimeout(timeoutId);
     return response;
   } catch (netErr) {
+    clearTimeout(timeoutId);
+    if (netErr.name === 'AbortError') {
+      throw new Error(`Connection timed out after ${timeoutMs / 1000}s while reaching ${url}. Please check your connection and retry.`);
+    }
     console.error(`[API Network Error] fetch failed for ${url}:`, netErr);
     throw new Error(
       `Cannot connect to FitBite backend at ${url}. ` +

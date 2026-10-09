@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
+import { apiFetch, safeJson } from '../config/api';
 import { 
   ChefHat, 
   ShoppingBag, 
@@ -55,7 +56,7 @@ export default function SellerDashboardPage() {
 
   useEffect(() => {
     if (!user) {
-      openAuthModal('seller', () => {});
+      openAuthModal({ mode: 'signin', accountType: 'seller', action: () => {} });
       return;
     }
     if (user.role !== 'seller' && user.role !== 'admin') {
@@ -83,42 +84,42 @@ export default function SellerDashboardPage() {
   };
 
   const fetchOverview = async () => {
-    const res = await fetch('/api/seller/overview', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setOverview(await res.json());
+    const res = await apiFetch('/api/seller/overview');
+    if (res.ok) setOverview(await safeJson(res));
   };
 
   const fetchOrders = async () => {
-    const res = await fetch('/api/seller/orders', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setOrders(await res.json());
+    const res = await apiFetch('/api/seller/orders');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setOrders(Array.isArray(data) ? data : []);
+    }
   };
 
   const fetchMeals = async () => {
-    const res = await fetch('/api/seller/meals', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) setMeals(await res.json());
+    const res = await apiFetch('/api/seller/meals');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setMeals(Array.isArray(data) ? data : []);
+    }
   };
 
   const fetchManifest = async () => {
-    const res = await fetch(`/api/seller/batch-manifest?date=${manifestDate}&slot=${manifestSlot}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (res.ok) setManifest(await res.json());
+    const res = await apiFetch(`/api/seller/batch-manifest?date=${manifestDate}&slot=${manifestSlot}`);
+    if (res.ok) setManifest(await safeJson(res));
   };
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-      const res = await fetch(`/api/seller/orders/${orderId}/status`, {
+      const res = await apiFetch(`/api/seller/orders/${orderId}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
         fetchOrders();
         fetchOverview();
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         alert(data.error || 'Failed to update order status');
       }
     } catch (err) {
@@ -128,12 +129,8 @@ export default function SellerDashboardPage() {
 
   const handleToggleMealAvailability = async (meal) => {
     try {
-      const res = await fetch(`/api/seller/meals/${meal.id}`, {
+      const res = await apiFetch(`/api/seller/meals/${meal.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ is_available: !meal.is_available })
       });
       if (res.ok) {
@@ -147,12 +144,8 @@ export default function SellerDashboardPage() {
   const handleCreateMeal = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/seller/meals', {
+      const res = await apiFetch('/api/seller/meals', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify(newMeal)
       });
       if (res.ok) {
@@ -160,7 +153,7 @@ export default function SellerDashboardPage() {
         fetchMeals();
         alert('New dish added to kitchen menu!');
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         alert(data.error || 'Failed to add meal');
       }
     } catch (err) {

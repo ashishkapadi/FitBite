@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { MealCard } from '../components/meal/MealCard';
 import { Search, Filter, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { apiFetch, safeJson } from '../config/api';
 
 export function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -10,6 +11,7 @@ export function ExplorePage() {
   const [categories, setCategories] = useState([]);
   const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Filter States
   const [query, setQuery] = useState(searchParams.get('q') || '');
@@ -25,17 +27,25 @@ export function ExplorePage() {
   }, []);
 
   useEffect(() => {
-    fetchMeals();
-  }, [selectedCategory, selectedSeller, selectedDietary, onlyHighProtein, onlyTiffin, maxPrice]);
+    const qParam = searchParams.get('q') || '';
+    setQuery(qParam);
+    fetchMeals(qParam);
+  }, [searchParams, selectedCategory, selectedSeller, selectedDietary, onlyHighProtein, onlyTiffin, maxPrice]);
 
   const fetchMetadata = async () => {
     try {
       const [catRes, sellRes] = await Promise.all([
-        fetch('/api/catalog/categories'),
-        fetch('/api/catalog/sellers')
+        apiFetch('/api/catalog/categories'),
+        apiFetch('/api/catalog/sellers')
       ]);
-      if (catRes.ok) setCategories(await catRes.json());
-      if (sellRes.ok) setSellers(await sellRes.json());
+      if (catRes.ok) {
+        const catData = await safeJson(catRes);
+        setCategories(Array.isArray(catData) ? catData : []);
+      }
+      if (sellRes.ok) {
+        const sellData = await safeJson(sellRes);
+        setSellers(Array.isArray(sellData) ? sellData : []);
+      }
     } catch (e) {
       console.error('Metadata error:', e);
     }
@@ -44,6 +54,7 @@ export function ExplorePage() {
   const fetchMeals = async (searchOverride = null) => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams();
       const currentQ = searchOverride !== null ? searchOverride : query;
       if (currentQ) params.set('query', currentQ);
@@ -54,12 +65,16 @@ export function ExplorePage() {
       if (onlyTiffin) params.set('tiffin_only', 'true');
       if (maxPrice < 600) params.set('max_price', String(maxPrice));
 
-      const res = await fetch(`/api/catalog/meals?${params.toString()}`);
+      const res = await apiFetch(`/api/catalog/meals?${params.toString()}`);
       if (res.ok) {
-        setMeals(await res.json());
+        const data = await safeJson(res);
+        setMeals(Array.isArray(data) ? data : []);
+      } else {
+        setError(`Unable to load meals from server (${res.status} ${res.statusText || 'Error'}).`);
       }
     } catch (e) {
       console.error('Fetch meals error:', e);
+      setError(e.message || 'Unable to connect to FitBite backend. Please check your network connection.');
     } finally {
       setLoading(false);
     }
@@ -238,6 +253,23 @@ export function ExplorePage() {
             <div style={{ textAlign: 'center', padding: '60px 0', color: '#64748B' }}>
               <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🍲</div>
               Loading nutritious meals...
+            </div>
+          ) : error ? (
+            <div style={{
+              backgroundColor: '#FEF2F2',
+              borderRadius: '20px',
+              padding: '48px 24px',
+              textAlign: 'center',
+              border: '1.5px solid #FCA5A5'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
+              <h3 style={{ fontSize: '1.25rem', color: '#991B1B', marginBottom: '8px' }}>Unable to load meals</h3>
+              <p style={{ color: '#7F1D1D', fontSize: '0.92rem', marginBottom: '20px', maxWidth: '500px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+                {error}
+              </p>
+              <button onClick={() => fetchMeals()} className="btn btn-primary btn-sm" style={{ backgroundColor: '#DC2626', borderColor: '#DC2626' }}>
+                Retry Loading Meals
+              </button>
             </div>
           ) : meals.length === 0 ? (
             <div style={{

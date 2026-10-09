@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ImageWithFallback } from '../components/common/ImageWithFallback';
+import { apiFetch, safeJson } from '../config/api';
 import {
   Sliders,
   Sparkles,
@@ -60,33 +61,35 @@ export function BuildMealPage() {
   const fetchInitialData = async () => {
     try {
       const [mealsRes, optRes] = await Promise.all([
-        fetch('/api/catalog/meals'),
-        fetch('/api/catalog/customization-options')
+        apiFetch('/api/catalog/meals'),
+        apiFetch('/api/catalog/customization-options')
       ]);
 
       if (mealsRes.ok) {
-        const mList = await mealsRes.json();
-        setAvailableMeals(mList);
+        const mList = await safeJson(mealsRes);
+        setAvailableMeals(Array.isArray(mList) ? mList : []);
         const initialId = mealIdParam || (mList[0]?.id || '');
         setSelectedMealId(initialId);
       }
 
       if (optRes.ok) {
-        const optData = await optRes.json();
-        setCustomOptions(optData.grouped);
+        const optData = await safeJson(optRes);
+        if (optData && optData.grouped) {
+          setCustomOptions(optData.grouped);
 
-        // Set initial defaults
-        const defaultBase = optData.grouped.base.find(o => o.is_default) || optData.grouped.base[0];
-        const defaultProtein = optData.grouped.protein[0];
-        const defaultSide = optData.grouped.side.find(o => o.is_default) || optData.grouped.side[0];
-        const defaultSpice = optData.grouped.spice.find(o => o.is_default) || optData.grouped.spice[1];
-        const defaultSauce = optData.grouped.sauce.find(o => o.is_default) || optData.grouped.sauce[0];
+          // Set initial defaults
+          const defaultBase = optData.grouped.base?.find(o => o.is_default) || optData.grouped.base?.[0];
+          const defaultProtein = optData.grouped.protein?.[0];
+          const defaultSide = optData.grouped.side?.find(o => o.is_default) || optData.grouped.side?.[0];
+          const defaultSpice = optData.grouped.spice?.find(o => o.is_default) || optData.grouped.spice?.[1];
+          const defaultSauce = optData.grouped.sauce?.find(o => o.is_default) || optData.grouped.sauce?.[0];
 
-        if (defaultBase) setSelectedBaseId(defaultBase.id);
-        if (defaultProtein) setSelectedProteinId(defaultProtein.id);
-        if (defaultSide) setSelectedSideId(defaultSide.id);
-        if (defaultSpice) setSelectedSpiceId(defaultSpice.id);
-        if (defaultSauce) setSelectedSauceId(defaultSauce.id);
+          if (defaultBase) setSelectedBaseId(defaultBase.id);
+          if (defaultProtein) setSelectedProteinId(defaultProtein.id);
+          if (defaultSide) setSelectedSideId(defaultSide.id);
+          if (defaultSpice) setSelectedSpiceId(defaultSpice.id);
+          if (defaultSauce) setSelectedSauceId(defaultSauce.id);
+        }
       }
     } catch (e) {
       console.error('Build meal data error:', e);
@@ -121,9 +124,8 @@ export function BuildMealPage() {
     if (!selectedMealId) return;
     try {
       setLoadingCalc(true);
-      const res = await fetch('/api/custom-meals/calculate', {
+      const res = await apiFetch('/api/custom-meals/calculate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           meal_id: selectedMealId,
           selections: {
@@ -141,7 +143,7 @@ export function BuildMealPage() {
       });
 
       if (res.ok) {
-        setCalcResult(await res.json());
+        setCalcResult(await safeJson(res));
       }
     } catch (e) {
       console.error('Recalculate error:', e);
@@ -206,13 +208,8 @@ export function BuildMealPage() {
     }
 
     try {
-      const token = localStorage.getItem('fitbite_token');
-      const res = await fetch('/api/custom-meals/save', {
+      const res = await apiFetch('/api/custom-meals/save', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           meal_id: selectedMealId,
           custom_name: customMealName || `Custom ${selectedMeal?.name}`,

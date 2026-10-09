@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe, before } from 'node:test';
 import assert from 'node:assert';
 
 const BASE_URL = 'http://localhost:5000/api';
@@ -10,6 +10,18 @@ describe('FitBite Complete End-to-End User Journeys', () => {
   let createdOrderId = '';
   let createdSubId = '';
   let testAddressId = '';
+
+  before(async () => {
+    try {
+      const probe = await fetch('http://localhost:5000/health').catch(() => null);
+      if (!probe || !probe.ok) {
+        await import('../src/server.js');
+        await new Promise(resolve => setTimeout(resolve, 1200));
+      }
+    } catch (e) {
+      console.warn('Server initialization in test:', e.message);
+    }
+  });
 
   test('Journey 1: Public Guest Browsing', async () => {
     const catRes = await fetch(`${BASE_URL}/catalog/categories`);

@@ -118,6 +118,7 @@ if (!fs.existsSync(publicUploadsDir)) fs.mkdirSync(publicUploadsDir, { recursive
 
 app.use('/uploads/public', express.static(publicUploadsDir, { maxAge: '7d' }));
 app.use('/uploads', express.static(uploadsDir));
+app.use('/images', express.static(publicUploadsDir, { maxAge: '7d' }));
 
 // System Health Endpoints (Root and /api/health for PaaS probes like Render, Railway, AWS ECS)
 const healthHandler = (req, res) => {
@@ -179,9 +180,9 @@ async function startServer() {
   try {
     validateEnvironment();
     await db.init();
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`====================================================`);
-      console.log(`  FitBite Backend Running on port ${PORT}`);
+      console.log(`  FitBite Backend Running on 0.0.0.0:${PORT}`);
       console.log(`  Database Mode: ${db.getMode().toUpperCase()}`);
       console.log(`  Health Check: http://localhost:${PORT}/api/health`);
       console.log(`  Allowed Origins: ${configuredOrigins.length ? configuredOrigins.join(', ') : 'Dynamic Vercel & Localhost'}`);

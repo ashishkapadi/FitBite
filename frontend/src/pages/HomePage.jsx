@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MealCard } from '../components/meal/MealCard';
 import { ImageWithFallback } from '../components/common/ImageWithFallback';
 import { useAuth } from '../context/AuthContext';
+import { apiFetch, safeJson } from '../config/api';
 import {
   Sparkles,
   ArrowRight,
@@ -32,6 +33,7 @@ export function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchHomeData();
@@ -40,30 +42,38 @@ export function HomePage() {
   const fetchHomeData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const [catRes, mealsRes, sellersRes] = await Promise.all([
-        fetch('/api/catalog/categories'),
-        fetch('/api/catalog/meals'),
-        fetch('/api/catalog/sellers')
+        apiFetch('/api/catalog/categories'),
+        apiFetch('/api/catalog/meals'),
+        apiFetch('/api/catalog/sellers')
       ]);
 
       if (catRes.ok) {
-        const catData = await catRes.json();
-        setCategories(catData);
+        const catData = await safeJson(catRes);
+        setCategories(Array.isArray(catData) ? catData : []);
       }
 
       if (mealsRes.ok) {
-        const mealData = await mealsRes.json();
-        setPopularMeals(mealData.filter(m => m.is_featured).slice(0, 8));
-        setHighProteinMeals(mealData.filter(m => (m.protein_grams || 0) >= 25).slice(0, 4));
-        setFamilyCombos(mealData.filter(m => (m.dietary_tags || []).includes('Family Combos')).slice(0, 3));
+        const mealData = await safeJson(mealsRes);
+        if (Array.isArray(mealData)) {
+          setPopularMeals(mealData.filter(m => m.is_featured).slice(0, 8));
+          setHighProteinMeals(mealData.filter(m => (m.protein_grams || 0) >= 25).slice(0, 4));
+          setFamilyCombos(mealData.filter(m => (m.dietary_tags || []).includes('Family Combos')).slice(0, 3));
+        }
+      } else {
+        setError(`Unable to load food catalog from backend (${mealsRes.status} ${mealsRes.statusText || 'Error'}).`);
       }
 
       if (sellersRes.ok) {
-        const sellerData = await sellersRes.json();
-        setFeaturedSellers(sellerData.slice(0, 6));
+        const sellerData = await safeJson(sellersRes);
+        if (Array.isArray(sellerData)) {
+          setFeaturedSellers(sellerData.slice(0, 6));
+        }
       }
     } catch (err) {
       console.error('Home data load error:', err);
+      setError(err.message || 'Unable to connect to FitBite backend. Please check your network connection.');
     } finally {
       setLoading(false);
     }
@@ -191,7 +201,7 @@ export function HomePage() {
                 border: '4px solid #FFFFFF'
               }}>
                 <ImageWithFallback
-                  src="https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=1000&q=80"
+                  src="/images/hero-banner.jpg"
                   alt="FitBite Healthy Homestyle Meals"
                   style={{ width: '100%', height: '420px', objectFit: 'cover' }}
                 />
@@ -335,15 +345,35 @@ export function HomePage() {
             </Link>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
-            gap: '24px'
-          }}>
-            {popularMeals.map((meal) => (
-              <MealCard key={meal.id} meal={meal} />
-            ))}
-          </div>
+          {error ? (
+            <div style={{
+              backgroundColor: '#FEF2F2',
+              borderRadius: '20px',
+              padding: '40px 24px',
+              textAlign: 'center',
+              border: '1.5px solid #FCA5A5',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
+              <h3 style={{ fontSize: '1.25rem', color: '#991B1B', marginBottom: '8px' }}>Unable to load meals</h3>
+              <p style={{ color: '#7F1D1D', fontSize: '0.92rem', marginBottom: '16px', maxWidth: '480px', margin: '0 auto 16px' }}>
+                {error}
+              </p>
+              <button onClick={() => fetchHomeData()} className="btn btn-primary btn-sm" style={{ backgroundColor: '#DC2626', borderColor: '#DC2626' }}>
+                Retry Loading
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+              gap: '24px'
+            }}>
+              {popularMeals.map((meal) => (
+                <MealCard key={meal.id} meal={meal} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

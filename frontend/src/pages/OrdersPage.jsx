@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
+import { apiFetch, safeJson } from '../config/api';
 import { 
   ShoppingBag, 
   Clock, 
@@ -32,12 +33,10 @@ export default function OrdersPage() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/orders/my', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch('/api/orders/my');
       if (res.ok) {
-        const data = await res.json();
-        setOrders(data);
+        const data = await safeJson(res);
+        setOrders(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error('Error fetching orders:', err);

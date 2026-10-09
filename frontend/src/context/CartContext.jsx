@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { apiFetch, safeJson } from '../config/api';
 
 const CartContext = createContext(null);
 
@@ -30,11 +31,9 @@ export function CartProvider({ children }) {
       const token = localStorage.getItem('fitbite_token');
       if (!token) return;
 
-      const res = await fetch('/api/cart', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch('/api/cart');
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         setCart(data);
         setItems(data.items || []);
         setSeller(data.seller || null);
@@ -65,13 +64,8 @@ export function CartProvider({ children }) {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('fitbite_token');
-      const res = await fetch('/api/cart/add', {
+      const res = await apiFetch('/api/cart/add', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           meal_id,
           quantity,
@@ -82,7 +76,7 @@ export function CartProvider({ children }) {
         })
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (res.status === 409 && data.conflict) {
         // Kitchen conflict: Cart contains items from another kitchen
@@ -122,13 +116,8 @@ export function CartProvider({ children }) {
 
   const updateQuantity = async (itemId, quantity) => {
     try {
-      const token = localStorage.getItem('fitbite_token');
-      await fetch(`/api/cart/items/${itemId}`, {
+      await apiFetch(`/api/cart/items/${itemId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({ quantity })
       });
       await fetchCart();
@@ -139,10 +128,8 @@ export function CartProvider({ children }) {
 
   const removeItem = async (itemId) => {
     try {
-      const token = localStorage.getItem('fitbite_token');
-      await fetch(`/api/cart/items/${itemId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+      await apiFetch(`/api/cart/items/${itemId}`, {
+        method: 'DELETE'
       });
       await fetchCart();
     } catch (err) {
@@ -152,10 +139,8 @@ export function CartProvider({ children }) {
 
   const clearCart = async () => {
     try {
-      const token = localStorage.getItem('fitbite_token');
-      await fetch('/api/cart/clear', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+      await apiFetch('/api/cart/clear', {
+        method: 'DELETE'
       });
       await fetchCart();
     } catch (err) {

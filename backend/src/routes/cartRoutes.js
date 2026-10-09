@@ -220,7 +220,7 @@ router.delete('/items/:id', requireAuth, async (req, res) => {
 });
 
 // 5. Clear entire cart
-router.delete('/clear', requireAuth, async (req, res) => {
+router.delete(['/', '/clear'], requireAuth, async (req, res) => {
   try {
     const user = req.user;
     const cart = await getOrCreateCart(user.id);

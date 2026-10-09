@@ -5,8 +5,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.resolve(__dirname, '../../data');
-const STORE_PATH = path.join(DATA_DIR, 'fitbite_store.json');
+const DATA_DIR = process.env.DATA_DIR 
+  ? path.resolve(process.env.DATA_DIR) 
+  : path.resolve(__dirname, '../../data');
+const STORE_PATH = process.env.STORE_PATH 
+  ? path.resolve(process.env.STORE_PATH) 
+  : path.join(DATA_DIR, 'fitbite_store.json');
 
 class LocalStore {
   constructor() {

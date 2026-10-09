@@ -133,7 +133,7 @@ router.post('/meals', async (req, res) => {
       protein_grams: protein_grams ? parseFloat(protein_grams) : 15.0,
       carbs_grams: carbs_grams ? parseFloat(carbs_grams) : 60.0,
       fat_grams: fat_grams ? parseFloat(fat_grams) : 12.0,
-      image_url: image_url || 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+      image_url: image_url || '/images/meals/meal_006.jpg',
       rating: 5.0,
       rating_count: 0
     });

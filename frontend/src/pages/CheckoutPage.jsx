@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
+import { apiFetch, safeJson } from '../config/api';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -62,13 +63,11 @@ export default function CheckoutPage() {
 
   const fetchAddresses = async () => {
     try {
-      const res = await fetch('/api/users/addresses', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await apiFetch('/api/users/addresses');
       if (res.ok) {
-        const data = await res.json();
-        setAddresses(data);
-        if (data.length > 0) {
+        const data = await safeJson(res);
+        setAddresses(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) {
           setSelectedAddressId(data[0].id);
         } else {
           setShowNewAddressForm(true);
@@ -84,16 +83,12 @@ export default function CheckoutPage() {
     if (!newAddress.address_line1.trim()) return;
 
     try {
-      const res = await fetch('/api/users/addresses', {
+      const res = await apiFetch('/api/users/addresses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify(newAddress)
       });
       if (res.ok) {
-        const saved = await res.json();
+        const saved = await safeJson(res);
         setAddresses([...addresses, saved]);
         setSelectedAddressId(saved.id);
         setShowNewAddressForm(false);
@@ -116,19 +111,15 @@ export default function CheckoutPage() {
   const recalculateBill = async (activeCoupon) => {
     try {
       const subtotal = cart.items.reduce((sum, item) => sum + (item.total_price || item.item_price * item.quantity), 0);
-      const res = await fetch('/api/orders/calculate', {
+      const res = await apiFetch('/api/orders/calculate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           subtotal,
           coupon_code: activeCoupon
         })
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         setBill(data);
       }
     } catch (err) {
@@ -144,19 +135,15 @@ export default function CheckoutPage() {
     setCouponFeedback(null);
     try {
       const subtotal = cart.items.reduce((sum, item) => sum + (item.total_price || item.item_price * item.quantity), 0);
-      const res = await fetch('/api/orders/calculate', {
+      const res = await apiFetch('/api/orders/calculate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           subtotal,
           coupon_code: couponCode.trim().toUpperCase()
         })
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
       if (data.coupon) {
         setCouponFeedback({
           success: true,
@@ -183,7 +170,7 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     if (!user) {
-      openAuthModal('customer', () => handlePlaceOrder());
+      openAuthModal({ mode: 'signin', accountType: 'customer', action: () => handlePlaceOrder() });
       return;
     }
 
@@ -201,12 +188,8 @@ export default function CheckoutPage() {
     setOrderError(null);
 
     try {
-      const res = await fetch('/api/orders/checkout', {
+      const res = await apiFetch('/api/orders/checkout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
         body: JSON.stringify({
           address_id: selectedAddressId,
           payment_method: paymentMethod,
@@ -218,7 +201,7 @@ export default function CheckoutPage() {
         })
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to place order');
