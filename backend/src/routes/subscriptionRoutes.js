@@ -98,15 +98,21 @@ router.get('/plans', async (req, res) => {
       }
 
       // Fetch 2-3 sample meals from this kitchen for preview
-      const sellerMeals = await db.find('meals', m => m.seller_id === seller.id && Boolean(m.is_available));
-      const sampleMeals = sellerMeals.slice(0, 3).map(m => ({
-        id: m.id,
-        name: m.name,
-        image_url: m.image_url,
-        base_price: parseFloat(m.base_price),
-        cuisine: m.cuisine,
-        dietary_tags: m.dietary_tags || []
-      }));
+      let sampleMeals = [];
+      try {
+        const sellerMeals = await db.find('meals', { seller_id: seller.id });
+        const availableMeals = sellerMeals.filter(m => Boolean(m.is_available));
+        sampleMeals = availableMeals.slice(0, 3).map(m => ({
+          id: m.id,
+          name: m.name,
+          image_url: m.image_url,
+          base_price: parseFloat(m.base_price),
+          cuisine: m.cuisine,
+          dietary_tags: m.dietary_tags || []
+        }));
+      } catch (err) {
+        console.warn('Could not fetch sample meals for seller:', seller.id, err.message);
+      }
 
       // Parse supported slots
       let supportedSlots = ['lunch', 'dinner', 'both'];
@@ -132,19 +138,23 @@ router.get('/plans', async (req, res) => {
       });
 
       // Rotating menu preview from daily_tiffin_menus or seller meals
-      const dailyMenus = await db.find('daily_tiffin_menus', m => m.seller_id === seller.id);
       let menuPreview = [];
-      if (dailyMenus && dailyMenus.length > 0) {
-        dailyMenus.sort((a, b) => (a.menu_date || '').localeCompare(b.menu_date || ''));
-        for (const dm of dailyMenus.slice(0, 5)) {
-          const mealObj = await db.findOne('meals', { id: dm.meal_id });
-          menuPreview.push({
-            date: dm.menu_date,
-            day: dm.day_of_week || 'Weekday',
-            meal_name: mealObj ? mealObj.name : 'Chef Special Thali',
-            slot: dm.slot || 'lunch'
-          });
+      try {
+        const dailyMenus = await db.find('daily_tiffin_menus', { seller_id: seller.id });
+        if (dailyMenus && dailyMenus.length > 0) {
+          dailyMenus.sort((a, b) => (a.menu_date || '').localeCompare(b.menu_date || ''));
+          for (const dm of dailyMenus.slice(0, 5)) {
+            const mealObj = await db.findOne('meals', { id: dm.meal_id });
+            menuPreview.push({
+              date: dm.menu_date,
+              day: dm.day_of_week || 'Weekday',
+              meal_name: mealObj ? mealObj.name : 'Chef Special Thali',
+              slot: dm.slot || 'lunch'
+            });
+          }
         }
+      } catch (err) {
+        console.warn('Could not fetch daily menus for seller:', seller.id, err.message);
       }
 
       // If no explicit daily menu rows, generate preview from seller's meals
@@ -155,6 +165,17 @@ router.get('/plans', async (req, res) => {
           meal_name: sampleMeals[idx % sampleMeals.length]?.name || 'Homestyle Special Thali',
           slot: 'lunch'
         }));
+      }
+
+      // Fallback menu preview if no meals yet
+      if (menuPreview.length === 0) {
+        menuPreview = [
+          { day: 'Monday', meal_name: 'Dal Tadka, Seasonal Subzi & Phulkas', slot: 'lunch' },
+          { day: 'Tuesday', meal_name: 'Paneer Bhurji with Jeera Rice', slot: 'lunch' },
+          { day: 'Wednesday', meal_name: 'Chole Masala with Steamed Basmati', slot: 'lunch' },
+          { day: 'Thursday', meal_name: 'Rajma Rasila with Salad Bowl', slot: 'lunch' },
+          { day: 'Friday', meal_name: 'Special Festive Thali & Kheer', slot: 'lunch' }
+        ];
       }
 
       // Determine dietary type and portion info based on plan name and kitchen
@@ -210,7 +231,7 @@ router.get('/plans', async (req, res) => {
     res.json(enriched);
   } catch (err) {
     console.error('Get plans error:', err);
-    res.status(500).json({ error: 'Server error retrieving subscription plans.' });
+    res.status(500).json({ error: 'Server error retrieving subscription plans.', details: err.message });
   }
 });
 
