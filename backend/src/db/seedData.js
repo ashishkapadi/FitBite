@@ -548,6 +548,48 @@ export const SEED_SUBSCRIPTION_PLANS = [
     plan_discount_percent: 12.00,
     max_skips_allowed: 2,
     is_active: true
+  },
+  {
+    id: 'sub_plan_04',
+    seller_id: 'seller_04',
+    plan_type: 'student',
+    name: 'Dakshin Student Express Mon-Fri Monthly Thali',
+    description: 'Authentic South Indian student plan with freshly steamed sambar rice, rasam, curd rice, and seasonal kootu. Mon–Fri deliveries only (weekends excluded).',
+    cycle_days: 22,
+    delivery_frequency: 'weekdays_only',
+    supported_slots: ['lunch', 'dinner', 'both'],
+    base_price_per_meal: 89.00,
+    plan_discount_percent: 25.00,
+    max_skips_allowed: 1,
+    is_active: true
+  },
+  {
+    id: 'sub_plan_05',
+    seller_id: 'seller_04',
+    plan_type: 'working_professional',
+    name: 'Dakshin Corporate 28-Day Homestyle Feast',
+    description: 'Complete 28 consecutive days feast including weekends. Traditional South Indian delicacies prepared with cold-pressed gingelly oil and mild coconut.',
+    cycle_days: 28,
+    delivery_frequency: 'daily',
+    supported_slots: ['lunch', 'dinner', 'both'],
+    base_price_per_meal: 119.00,
+    plan_discount_percent: 18.00,
+    max_skips_allowed: 2,
+    is_active: true
+  },
+  {
+    id: 'sub_plan_06',
+    seller_id: 'seller_03',
+    plan_type: 'working_professional',
+    name: 'Sattvik Pure Veg 28-Day Traditional Dabba',
+    description: 'Pure vegetarian 28 consecutive day meal cycle with no onion and no garlic options. Gentle on digestion, freshly tossed rotis and seasonal green subzis.',
+    cycle_days: 28,
+    delivery_frequency: 'daily',
+    supported_slots: ['lunch', 'dinner', 'both'],
+    base_price_per_meal: 135.00,
+    plan_discount_percent: 20.00,
+    max_skips_allowed: 2,
+    is_active: true
   }
 ];
 

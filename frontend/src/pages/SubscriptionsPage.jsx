@@ -25,6 +25,7 @@ export default function SubscriptionsPage() {
 
   const [activeTab, setActiveTab] = useState('browse'); // 'browse' | 'my_subscriptions'
   const [plans, setPlans] = useState([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
   const [mySubscriptions, setMySubscriptions] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState('both');
@@ -34,6 +35,9 @@ export default function SubscriptionsPage() {
     return tomorrow.toISOString().split('T')[0];
   });
   
+  // Selected plan computed from plans list
+  const selectedPlan = plans.find(p => p.id === selectedPlanId) || (plans.length > 0 ? plans[0] : null);
+
   // Pre-purchase calculated breakdown
   const [calculation, setCalculation] = useState(null);
   const [calculating, setCalculating] = useState(false);
@@ -59,17 +63,20 @@ export default function SubscriptionsPage() {
   }, [user, token]);
 
   const fetchPlans = async () => {
+    setLoadingPlans(true);
     try {
       const res = await apiFetch('/api/subscriptions/plans');
       if (res.ok) {
         const data = await safeJson(res);
         setPlans(Array.isArray(data) ? data : []);
         if (Array.isArray(data) && data.length > 0) {
-          setSelectedPlanId(data[0].id);
+          setSelectedPlanId(prev => (prev && data.some(p => p.id === prev) ? prev : data[0].id));
         }
       }
     } catch (err) {
       console.error('Error fetching plans:', err);
+    } finally {
+      setLoadingPlans(false);
     }
   };
 
@@ -230,8 +237,6 @@ export default function SubscriptionsPage() {
     }
   };
 
-  const selectedPlan = plans.find(p => p.id === selectedPlanId);
-
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2.5rem 1rem 5rem' }}>
       {/* Top Banner */}
@@ -292,83 +297,142 @@ export default function SubscriptionsPage() {
       {/* TAB 1: BROWSE PLANS & PRE-PURCHASE CALCULATOR */}
       {activeTab === 'browse' && (
         <div>
+          {/* Loading State */}
+          {loadingPlans && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E5E7EB', marginBottom: '2rem' }}>
+              <RefreshCw size={36} color="#10B981" style={{ margin: '0 auto 1rem', animation: 'spin 1s linear infinite' }} />
+              <div style={{ fontSize: '1.1rem', fontWeight: 600, color: '#374151' }}>Loading authentic tiffin subscription plans...</div>
+              <p style={{ color: '#6B7280', fontSize: '0.9rem', marginTop: '0.5rem' }}>Fetching verified cloud kitchen menus and daily schedules</p>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!loadingPlans && plans.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E5E7EB', marginBottom: '2rem' }}>
+              <Calendar size={48} color="#9CA3AF" style={{ margin: '0 auto 1rem' }} />
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#111827', marginBottom: '0.5rem' }}>No Subscription Plans Found</h3>
+              <p style={{ color: '#6B7280', maxWidth: '440px', margin: '0 auto 1.5rem', fontSize: '0.95rem' }}>
+                Subscription plans from verified partner kitchens are being updated. Click below to refresh available plans.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={fetchPlans}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <RefreshCw size={16} /> Refresh Subscription Plans
+              </button>
+            </div>
+          )}
+
           {/* Plan Comparison Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-            {plans.map((p) => {
-              const isSelected = p.id === selectedPlanId;
-              const isStudent = p.plan_type === 'student';
+          {!loadingPlans && plans.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
+              {plans.map((p) => {
+                const isSelected = p.id === selectedPlanId;
+                const isStudent = p.plan_type === 'student';
+                const perMealPrice = p.per_meal_cost || Math.round(p.base_price_per_meal * (1 - (p.plan_discount_percent || 0) / 100));
 
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => setSelectedPlanId(p.id)}
-                  style={{
-                    background: '#FFFFFF',
-                    borderRadius: '1.25rem',
-                    border: isSelected ? '2px solid #10B981' : '1px solid #E5E7EB',
-                    padding: '2rem',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    transition: 'all 0.2s ease',
-                    boxShadow: isSelected ? '0 10px 25px -5px rgba(16, 185, 129, 0.15)' : '0 2px 4px rgba(0,0,0,0.04)'
-                  }}
-                >
-                  {isSelected && (
-                    <div style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: '#10B981', color: '#FFF', padding: '0.25rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <CheckCircle size={14} /> Selected
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => setSelectedPlanId(p.id)}
+                    style={{
+                      background: '#FFFFFF',
+                      borderRadius: '1.25rem',
+                      border: isSelected ? '2px solid #10B981' : '1px solid #E5E7EB',
+                      padding: '2rem',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isSelected ? '0 10px 25px -5px rgba(16, 185, 129, 0.15)' : '0 2px 4px rgba(0,0,0,0.04)'
+                    }}
+                  >
+                    {isSelected && (
+                      <div style={{ position: 'absolute', top: '1.25rem', right: '1.25rem', background: '#10B981', color: '#FFF', padding: '0.25rem 0.65rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckCircle size={14} /> Selected Plan
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: isStudent ? '#6366F1' : '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+                      {isStudent ? '🎒 Academic / Student Routine' : '🏢 Corporate / Working Professional'}
                     </div>
-                  )}
 
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: isStudent ? '#6366F1' : '#059669', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-                    {isStudent ? '🎒 Academic / Student Routine' : '🏢 Corporate / Working Professional'}
-                  </div>
+                    <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#111827', margin: '0 0 0.5rem' }}>
+                      {p.name}
+                    </h3>
 
-                  <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#111827', margin: '0 0 0.5rem' }}>
-                    {p.name}
-                  </h3>
+                    <p style={{ color: '#4B5563', fontSize: '0.92rem', margin: '0 0 1.25rem', lineHeight: '1.5' }}>
+                      {p.description}
+                    </p>
 
-                  <p style={{ color: '#4B5563', fontSize: '0.95rem', margin: '0 0 1.25rem', lineHeight: '1.5' }}>
-                    {p.description}
-                  </p>
+                    <div style={{ background: '#F9FAFB', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.25rem', border: '1px solid #F3F4F6' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827' }}>₹{perMealPrice}</span>
+                        <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>/ meal ({p.base_price_per_meal} base)</span>
+                        {p.plan_discount_percent > 0 && (
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#059669', background: '#ECFDF5', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                            Save {p.plan_discount_percent}%
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: '#334155', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Kitchen: <b>{p.kitchen_name || p.seller?.business_name || 'Verified Kitchen'}</b></span>
+                        <span style={{ color: '#F59E0B', fontWeight: 700 }}>★ {p.seller?.rating || '4.9'}</span>
+                      </div>
+                    </div>
 
-                  <div style={{ background: '#F9FAFB', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827' }}>₹{p.base_price_per_meal}</span>
-                      <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>/ meal base</span>
-                      {p.plan_discount_percent > 0 && (
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#059669', background: '#ECFDF5', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
-                          Save {p.plan_discount_percent}%
+                    {/* Highlights */}
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.25rem', fontSize: '0.88rem', color: '#374151', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                      <li style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <CheckCircle size={16} color="#10B981" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <span>
+                          {isStudent
+                            ? 'Deliveries Mon–Fri only (Weekends auto-excluded from billing)'
+                            : '28 consecutive calendar days daily cycle (includes weekends)'}
                         </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.8rem', color: '#4B5563', marginTop: '0.5rem' }}>
-                      Provider: <b>{p.seller?.business_name || 'Verified Cloud Kitchen'}</b> ({p.seller?.area || 'Bandra West'})
-                    </div>
-                  </div>
+                      </li>
+                      <li style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <CheckCircle size={16} color="#10B981" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <span>
+                          {isStudent
+                            ? 'Pay strictly for eligible college weekdays in chosen window'
+                            : (p.skip_policy || 'Up to 2 skip days permitted (each extends subscription end date by 1 day)')}
+                        </span>
+                      </li>
+                      <li style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <CheckCircle size={16} color="#10B981" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <span>Supported slots: {Array.isArray(p.supported_slots) ? p.supported_slots.join(', ') : 'Lunch, Dinner, Both'}</span>
+                      </li>
+                      <li style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <CheckCircle size={16} color="#10B981" style={{ marginTop: '2px', flexShrink: 0 }} />
+                        <span>Free doorstep delivery with stainless steel dabba option</span>
+                      </li>
+                    </ul>
 
-                  {/* Highlights */}
-                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.5rem', fontSize: '0.9rem', color: '#374151', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                    <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <CheckCircle size={16} color="#10B981" />
-                      {isStudent ? 'Deliveries Mon–Fri only (Weekends auto-excluded)' : '28 consecutive days daily cycle (includes weekends)'}
-                    </li>
-                    <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <CheckCircle size={16} color="#10B981" />
-                      {isStudent ? 'Pay strictly for eligible college weekdays' : 'Up to 2 skip days permitted (extends subscription end date)'}
-                    </li>
-                    <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <CheckCircle size={16} color="#10B981" />
-                      Exchange clean empty steel dabbas daily (eco-friendly)
-                    </li>
-                    <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <CheckCircle size={16} color="#10B981" />
-                      Free doorstep delivery across service pincodes
-                    </li>
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
+                    {/* Sample Kitchen Dishes Preview */}
+                    {p.sample_meals && p.sample_meals.length > 0 && (
+                      <div style={{ marginTop: '1rem', borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                          Sample Dishes from {p.kitchen_name || 'Kitchen'}:
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                          {p.sample_meals.map(sm => (
+                            <div key={sm.id} style={{ background: '#F8FAFC', borderRadius: '6px', padding: '4px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
+                              <ImageWithFallback src={sm.image_url} alt={sm.name} style={{ width: '100%', height: '48px', objectFit: 'cover', borderRadius: '4px', marginBottom: '3px' }} />
+                              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {sm.name}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Configuration & Pre-Purchase Calculator */}
           {selectedPlan && (
@@ -465,6 +529,27 @@ export default function SubscriptionsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Rotating Menu Preview for Selected Plan */}
+              {selectedPlan?.menu_preview && selectedPlan.menu_preview.length > 0 && (
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '1rem', padding: '1.25rem', marginBottom: '2rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.75rem' }}>
+                    <Sparkles size={16} color="#10B981" />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A', textTransform: 'uppercase' }}>
+                      Rotating Weekly Menu Preview ({selectedPlan.kitchen_name || 'Kitchen'})
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                    {selectedPlan.menu_preview.map((item, idx) => (
+                      <div key={idx} style={{ background: '#FFFFFF', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #E2E8F0' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>{item.day || item.date}</div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#1E293B', marginTop: '3px' }}>{item.meal_name}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '2px' }}>Slot: {item.slot}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Exact Pre-Purchase Calculation Breakdown Table */}
               {calculation && (

@@ -310,4 +310,163 @@ router.get('/menus', async (req, res) => {
   }
 });
 
+// 7. Manage Tiffin Plans for this Kitchen
+router.get('/plans', async (req, res) => {
+  try {
+    const plans = await db.find('subscription_plans', { seller_id: req.seller.id });
+    const formatted = plans.map(p => ({
+      ...p,
+      is_active: Boolean(p.is_active),
+      base_price_per_meal: parseFloat(p.base_price_per_meal),
+      plan_discount_percent: parseFloat(p.plan_discount_percent || 0),
+      supported_slots: typeof p.supported_slots === 'string' ? JSON.parse(p.supported_slots) : (p.supported_slots || ['lunch', 'dinner', 'both'])
+    }));
+    res.json(formatted);
+  } catch (err) {
+    console.error('Seller get plans error:', err);
+    res.status(500).json({ error: 'Server error retrieving plans.' });
+  }
+});
+
+router.post('/plans', async (req, res) => {
+  try {
+    const {
+      name,
+      plan_type = 'working_professional',
+      description,
+      supported_slots = ['lunch', 'dinner', 'both'],
+      dietary_type = 'vegetarian',
+      base_price_per_meal,
+      plan_discount_percent = 15,
+      cycle_days = 28,
+      max_skips_allowed = 2
+    } = req.body;
+
+    if (!name || !base_price_per_meal) {
+      return res.status(400).json({ error: 'Plan name and base price per meal are required.' });
+    }
+
+    const planId = `sub_plan_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    const newPlan = await db.insert('subscription_plans', {
+      id: planId,
+      seller_id: req.seller.id,
+      name: name.trim(),
+      plan_type,
+      description: description ? description.trim() : 'Daily home-cooked meal plan',
+      supported_slots: Array.isArray(supported_slots) ? supported_slots : ['lunch', 'dinner', 'both'],
+      dietary_type,
+      base_price_per_meal: parseFloat(base_price_per_meal),
+      plan_discount_percent: parseFloat(plan_discount_percent || 0),
+      cycle_days: parseInt(cycle_days, 10) || (plan_type === 'student' ? 30 : 28),
+      max_skips_allowed: parseInt(max_skips_allowed, 10) || 2,
+      is_active: true
+    });
+
+    res.status(201).json({ message: 'Tiffin plan created successfully!', plan: newPlan });
+  } catch (err) {
+    console.error('Seller create plan error:', err);
+    res.status(500).json({ error: 'Server error creating plan.' });
+  }
+});
+
+router.put('/plans/:id', async (req, res) => {
+  try {
+    const plan = await db.findOne('subscription_plans', { id: req.params.id, seller_id: req.seller.id });
+    if (!plan) return res.status(404).json({ error: 'Subscription plan not found in your kitchen.' });
+
+    const updates = { ...req.body };
+    delete updates.id;
+    delete updates.seller_id;
+
+    if (updates.base_price_per_meal !== undefined) updates.base_price_per_meal = parseFloat(updates.base_price_per_meal);
+    if (updates.plan_discount_percent !== undefined) updates.plan_discount_percent = parseFloat(updates.plan_discount_percent);
+    if (updates.is_active !== undefined) updates.is_active = Boolean(updates.is_active);
+
+    await db.update('subscription_plans', { id: plan.id }, updates);
+    const updated = await db.findOne('subscription_plans', { id: plan.id });
+
+    res.json({ message: 'Plan updated successfully.', plan: updated });
+  } catch (err) {
+    console.error('Seller update plan error:', err);
+    res.status(500).json({ error: 'Server error updating plan.' });
+  }
+});
+
+// 8. Earnings & Revenue Breakdown
+router.get('/earnings', async (req, res) => {
+  try {
+    const seller = req.seller;
+    const orders = await db.find('orders', { seller_id: seller.id });
+    const deliveredOrders = orders.filter(o => o.status === 'delivered');
+
+    const orderRevenue = deliveredOrders.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0);
+    const subscriptions = await db.find('subscriptions', { seller_id: seller.id });
+    const activeSubs = subscriptions.filter(s => s.status === 'active');
+    const completedSubs = subscriptions.filter(s => s.status === 'completed');
+
+    const subscriptionRevenue = [...activeSubs, ...completedSubs].reduce((sum, s) => sum + parseFloat(s.total_amount_paid || 0), 0);
+    const grossTotal = Math.round((orderRevenue + subscriptionRevenue) * 100) / 100;
+    const platformCommissionPercent = 10;
+    const netPayout = Math.round((grossTotal * (1 - platformCommissionPercent / 100)) * 100) / 100;
+
+    res.json({
+      seller_id: seller.id,
+      business_name: seller.business_name,
+      summary: {
+        gross_revenue: grossTotal,
+        net_payout: netPayout,
+        platform_fee_percent: platformCommissionPercent,
+        orders_revenue: Math.round(orderRevenue * 100) / 100,
+        subscriptions_revenue: Math.round(subscriptionRevenue * 100) / 100,
+        total_delivered_orders: deliveredOrders.length,
+        total_active_subscriptions: activeSubs.length
+      },
+      recent_orders: deliveredOrders.slice(-5).reverse()
+    });
+  } catch (err) {
+    console.error('Seller earnings error:', err);
+    res.status(500).json({ error: 'Server error retrieving earnings.' });
+  }
+});
+
+// 9. Kitchen Settings
+router.get('/settings', async (req, res) => {
+  try {
+    const seller = await db.findOne('seller_profiles', { id: req.seller.id });
+    res.json(seller);
+  } catch (err) {
+    console.error('Seller get settings error:', err);
+    res.status(500).json({ error: 'Server error retrieving kitchen settings.' });
+  }
+});
+
+router.put('/settings', async (req, res) => {
+  try {
+    const allowedFields = [
+      'business_name',
+      'operating_address',
+      'area',
+      'operating_hours',
+      'fssai_number',
+      'preparation_cutoff_lunch_time',
+      'preparation_cutoff_dinner_time',
+      'delivery_radius_km'
+    ];
+
+    const updates = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    await db.update('seller_profiles', { id: req.seller.id }, updates);
+    const updated = await db.findOne('seller_profiles', { id: req.seller.id });
+    res.json({ message: 'Kitchen settings updated successfully.', seller: updated });
+  } catch (err) {
+    console.error('Seller update settings error:', err);
+    res.status(500).json({ error: 'Server error updating settings.' });
+  }
+});
+
 export default router;

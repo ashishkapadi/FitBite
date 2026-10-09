@@ -1,4 +1,4 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from '../src/db/db.js';
 import { calculateDeliveryDates } from '../src/routes/subscriptionRoutes.js';
@@ -17,6 +17,7 @@ describe('FitBite Comprehensive Edge Cases Suite', () => {
   let otherAddressId = '';
   let validMeal = null;
   let otherKitchenMeal = null;
+  let serverInstance = null;
 
   before(async () => {
     const probeHealth = async () => {
@@ -29,7 +30,8 @@ describe('FitBite Comprehensive Edge Cases Suite', () => {
     };
 
     if (!(await probeHealth())) {
-      await import('../src/server.js');
+      const serverMod = await import('../src/server.js');
+      serverInstance = serverMod.server;
       for (let i = 0; i < 25; i++) {
         if (await probeHealth()) break;
         await new Promise(r => setTimeout(r, 200));
@@ -570,5 +572,11 @@ describe('FitBite Comprehensive Edge Cases Suite', () => {
       const data = await cancelRes.json();
       assert.ok(data.error.includes('cannot be cancelled') || data.error.includes('already'));
     });
+  });
+
+  after(async () => {
+    if (serverInstance && typeof serverInstance.close === 'function') {
+      await new Promise(resolve => serverInstance.close(resolve));
+    }
   });
 });

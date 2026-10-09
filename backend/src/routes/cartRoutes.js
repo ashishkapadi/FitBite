@@ -9,8 +9,9 @@ const router = express.Router();
 async function getOrCreateCart(userId) {
   let cart = await db.findOne('carts', { user_id: userId });
   if (!cart) {
+    const shortId = `c_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
     cart = await db.insert('carts', {
-      id: `cart_${Date.now()}_${userId}`,
+      id: shortId,
       user_id: userId,
       seller_id: null
     });
@@ -134,8 +135,32 @@ router.post(['/add', '/items'], requireAuth, async (req, res) => {
     const qty = Math.max(1, parseInt(quantity, 10));
     const totalPrice = Math.round(itemPrice * qty * 100) / 100;
 
+    // Check if identical item already exists in cart to prevent duplicate entries from repeated clicks
+    const existingItems = await db.find('cart_items', { cart_id: cart.id, meal_id: meal.id });
+    const matchingItem = existingItems.find(i => {
+      const matchPortion = (i.portion_selected || 'standard') === portion;
+      const matchNotes = (i.special_notes || '') === (special_notes ? special_notes.trim() : '');
+      const matchCustom = JSON.stringify(i.customizations?.selections || {}) === JSON.stringify(customizations || {});
+      return matchPortion && matchNotes && matchCustom;
+    });
+
+    if (matchingItem) {
+      const updatedQty = matchingItem.quantity + qty;
+      const updatedTotal = Math.round(matchingItem.item_price * updatedQty * 100) / 100;
+      await db.update('cart_items', { id: matchingItem.id }, {
+        quantity: updatedQty,
+        total_price: updatedTotal
+      });
+      const updated = await db.findOne('cart_items', { id: matchingItem.id });
+      return res.status(200).json({
+        message: `Updated "${meal.name}" quantity to ${updatedQty}!`,
+        cart_item: updated
+      });
+    }
+
+    const shortItemId = `ci_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
     const newItem = await db.insert('cart_items', {
-      id: `ci_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: shortItemId,
       cart_id: cart.id,
       meal_id: meal.id,
       quantity: qty,
@@ -147,8 +172,8 @@ router.post(['/add', '/items'], requireAuth, async (req, res) => {
         estimated_calories: customResult.estimated_calories,
         estimated_protein: customResult.estimated_protein
       },
-      item_price: itemPrice,
-      total_price: totalPrice,
+      item_price: parseFloat(itemPrice),
+      total_price: parseFloat(totalPrice),
       special_notes: special_notes ? special_notes.trim() : null
     });
 

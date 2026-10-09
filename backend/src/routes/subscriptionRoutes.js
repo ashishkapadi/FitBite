@@ -80,19 +80,95 @@ function checkCutoffEnforcement(deliveryDateStr, slot, seller) {
 // 1. Get all available subscription plans
 router.get('/plans', async (req, res) => {
   try {
-    const plans = await db.find('subscription_plans', { is_active: true });
+    const allPlans = await db.find('subscription_plans');
     const enriched = [];
 
-    for (const plan of plans) {
+    for (const plan of allPlans) {
+      if (!Boolean(plan.is_active)) continue;
+
       const seller = await db.findOne('seller_profiles', { id: plan.seller_id });
+      // Only include plans from verified and active sellers
+      if (!seller || seller.verification_status !== 'approved' || seller.is_listed === false) {
+        continue;
+      }
+
+      // Fetch 2-3 sample meals from this kitchen for preview
+      const sellerMeals = await db.find('meals', m => m.seller_id === seller.id && Boolean(m.is_available));
+      const sampleMeals = sellerMeals.slice(0, 3).map(m => ({
+        id: m.id,
+        name: m.name,
+        image_url: m.image_url,
+        base_price: parseFloat(m.base_price),
+        cuisine: m.cuisine,
+        dietary_tags: m.dietary_tags || []
+      }));
+
+      // Parse supported slots
+      let supportedSlots = ['lunch', 'dinner', 'both'];
+      if (typeof plan.supported_slots === 'string') {
+        try {
+          supportedSlots = JSON.parse(plan.supported_slots);
+        } catch {
+          supportedSlots = ['lunch', 'dinner', 'both'];
+        }
+      } else if (Array.isArray(plan.supported_slots)) {
+        supportedSlots = plan.supported_slots;
+      }
+
+      const basePrice = parseFloat(plan.base_price_per_meal);
+      const discountPercent = parseFloat(plan.plan_discount_percent || 0);
+      const discountedPrice = Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100;
+
+      // Rotating menu preview from daily_tiffin_menus or seller meals
+      const dailyMenus = await db.find('daily_tiffin_menus', m => m.seller_id === seller.id);
+      let menuPreview = [];
+      if (dailyMenus && dailyMenus.length > 0) {
+        dailyMenus.sort((a, b) => (a.menu_date || '').localeCompare(b.menu_date || ''));
+        for (const dm of dailyMenus.slice(0, 5)) {
+          const mealObj = await db.findOne('meals', { id: dm.meal_id });
+          menuPreview.push({
+            date: dm.menu_date,
+            day: dm.day_of_week || 'Weekday',
+            meal_name: mealObj ? mealObj.name : 'Chef Special Thali',
+            slot: dm.slot || 'lunch'
+          });
+        }
+      }
+
+      // If no explicit daily menu rows, generate preview from seller's meals
+      if (menuPreview.length === 0 && sampleMeals.length > 0) {
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        menuPreview = days.map((day, idx) => ({
+          day,
+          meal_name: sampleMeals[idx % sampleMeals.length]?.name || 'Homestyle Special Thali',
+          slot: 'lunch'
+        }));
+      }
+
       enriched.push({
         ...plan,
-        seller: seller ? {
+        is_active: true,
+        base_price_per_meal: basePrice,
+        plan_discount_percent: discountPercent,
+        per_meal_cost: discountedPrice,
+        supported_slots: supportedSlots,
+        kitchen_name: seller.business_name,
+        seller: {
           id: seller.id,
           business_name: seller.business_name,
           area: seller.area,
-          rating: seller.rating
-        } : null
+          rating: seller.rating,
+          preparation_cutoff_lunch_time: seller.preparation_cutoff_lunch_time || '08:30:00',
+          preparation_cutoff_dinner_time: seller.preparation_cutoff_dinner_time || '16:00:00'
+        },
+        sample_meals: sampleMeals,
+        menu_preview: menuPreview,
+        skip_policy: plan.plan_type === 'working_professional'
+          ? 'Up to 2 skip days per 28-day cycle with morning cutoff notice. Each skipped day extends your subscription end date by 1 full day.'
+          : 'Weekends (Saturday & Sunday) are automatically excluded from billing. 1 emergency skip permitted per monthly cycle.',
+        schedule_details: plan.plan_type === 'working_professional'
+          ? '28 consecutive calendar days including weekends.'
+          : 'Monday to Friday deliveries only. Billable days are calculated for eligible college weekdays.'
       });
     }
 

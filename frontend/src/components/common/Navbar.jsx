@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import {
@@ -19,9 +19,11 @@ import {
 } from 'lucide-react';
 
 export function Navbar() {
-  const { user, openAuthModal, logout } = useAuth();
+  const { user, sellerProfile, openAuthModal, logout } = useAuth();
   const { itemCount } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isSellerRoute = location.pathname.startsWith('/seller');
 
   const [selectedLocation, setSelectedLocation] = useState('Indiranagar, Bengaluru');
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,6 +48,115 @@ export function Navbar() {
       navigate('/explore');
     }
   };
+
+  if (isSellerRoute) {
+    return (
+      <header style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        backgroundColor: '#0F172A',
+        color: '#FFFFFF',
+        borderBottom: '1px solid #1E293B',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
+      }}>
+        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '68px', gap: '16px' }}>
+          {/* Partner Brand */}
+          <Link to="/seller" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFFFFF',
+              fontWeight: 800,
+              fontSize: '1.3rem',
+              boxShadow: '0 4px 10px rgba(234, 88, 12, 0.4)'
+            }}>
+              👨‍🍳
+            </div>
+            <div>
+              <div style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: '1.45rem',
+                fontWeight: 800,
+                color: '#FFFFFF',
+                letterSpacing: '-0.02em',
+                lineHeight: 1
+              }}>
+                FitBite <span style={{ color: '#FB923C' }}>Partner</span>
+              </div>
+              <div style={{ fontSize: '0.68rem', color: '#94A3B8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Kitchen Operations &amp; Subscriptions
+              </div>
+            </div>
+          </Link>
+
+          {/* Kitchen Identity & Status */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {sellerProfile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="hide-mobile">
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#E2E8F0' }}>
+                  {sellerProfile.business_name || 'Partner Kitchen'}
+                </span>
+                <span style={{
+                  padding: '3px 8px',
+                  borderRadius: '999px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  backgroundColor: sellerProfile.verification_status === 'approved' ? '#065F46' : '#78350F',
+                  color: sellerProfile.verification_status === 'approved' ? '#34D399' : '#FDE68A',
+                  border: `1px solid ${sellerProfile.verification_status === 'approved' ? '#059669' : '#D97706'}`
+                }}>
+                  {sellerProfile.verification_status === 'approved' ? '✓ Verified Kitchen' : '⏳ Verification Pending'}
+                </span>
+              </div>
+            )}
+
+            <Link
+              to="/"
+              style={{
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                color: '#CBD5E1',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid #334155',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ← Customer Storefront
+            </Link>
+
+            {user && (
+              <button
+                type="button"
+                onClick={logout}
+                style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  color: '#F87171',
+                  background: 'transparent',
+                  border: '1px solid #7F1D1D',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header style={{
@@ -164,7 +275,11 @@ export function Navbar() {
             gap: '4px'
           }}>
             <Sliders size={16} color="#F97316" />
-            Customize Meal
+            Build Your Meal
+          </Link>
+
+          <Link to="/orders" style={{ fontWeight: 600, fontSize: '0.92rem', color: '#475569', transition: 'color 150ms' }}>
+            Orders
           </Link>
 
           <Link to="/meal-planner" style={{ fontWeight: 600, fontSize: '0.92rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px' }}>

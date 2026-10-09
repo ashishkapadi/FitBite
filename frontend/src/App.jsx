@@ -43,6 +43,7 @@ export default function App() {
             <Route path="/tracking/:orderId" element={<OrderTrackingPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/seller" element={<SellerDashboardPage />} />
+            <Route path="/seller/*" element={<SellerDashboardPage />} />
             <Route path="/admin" element={<AdminDashboardPage />} />
 
             {/* Fallback route */}

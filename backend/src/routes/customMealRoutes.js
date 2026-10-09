@@ -153,10 +153,11 @@ export async function calculateCustomMeal(baseMealId, selections) {
 // 1. Calculate live custom meal price and macros (Publicly accessible)
 router.post(['/calculate', '/recalculate'], async (req, res) => {
   try {
-    const { meal_id, selections } = req.body;
-    if (!meal_id) return res.status(400).json({ error: 'meal_id is required.' });
+    const mealId = req.body.meal_id || req.body.base_meal_id || req.body.mealId;
+    if (!mealId) return res.status(400).json({ error: 'meal_id is required.' });
 
-    const result = await calculateCustomMeal(meal_id, selections || {});
+    const selections = req.body.selections || req.body || {};
+    const result = await calculateCustomMeal(mealId, selections);
     res.json(result);
   } catch (err) {
     console.error('Calculate custom meal error:', err);

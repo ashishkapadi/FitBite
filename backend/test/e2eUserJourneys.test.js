@@ -1,4 +1,4 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 
 const BASE_URL = 'http://localhost:5000/api';
@@ -10,6 +10,7 @@ describe('FitBite Complete End-to-End User Journeys', () => {
   let createdOrderId = '';
   let createdSubId = '';
   let testAddressId = '';
+  let serverInstance = null;
 
   before(async () => {
     const probeHealth = async () => {
@@ -22,11 +23,18 @@ describe('FitBite Complete End-to-End User Journeys', () => {
     };
 
     if (!(await probeHealth())) {
-      await import('../src/server.js');
+      const serverModule = await import('../src/server.js');
+      serverInstance = serverModule.server;
       for (let i = 0; i < 25; i++) {
         if (await probeHealth()) break;
         await new Promise(r => setTimeout(r, 200));
       }
+    }
+  });
+
+  after(async () => {
+    if (serverInstance && typeof serverInstance.close === 'function') {
+      await new Promise(resolve => serverInstance.close(resolve));
     }
   });
 

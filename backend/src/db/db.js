@@ -70,11 +70,45 @@ export function validateSeedGraph() {
   }
 }
 
+const TABLES_WITH_UPDATED_AT = new Set([
+  'users',
+  'customer_profiles',
+  'customer_preferences',
+  'seller_profiles',
+  'meals',
+  'carts',
+  'orders',
+  'subscriptions'
+]);
+
+const TABLES_WITH_CREATED_AT = new Set([
+  'users',
+  'customer_profiles',
+  'customer_preferences',
+  'addresses',
+  'seller_profiles',
+  'meals',
+  'carts',
+  'cart_items',
+  'coupons',
+  'orders',
+  'payments',
+  'refunds',
+  'subscriptions',
+  'daily_tiffin_menus',
+  'scheduled_deliveries',
+  'saved_custom_meals',
+  'delivery_tracking_events',
+  'reviews',
+  'audit_logs'
+]);
+
 class DatabaseService {
   constructor() {
     this.mode = 'local'; // 'mysql' or 'local'
     this.pool = null;
     this.isInitialized = false;
+    this.schemaColumns = new Map();
   }
 
   async init() {
@@ -118,7 +152,23 @@ class DatabaseService {
       console.log(`[DB] Running database migrations on '${config.database}'...`);
       await runMigrations(this.pool);
 
-      // 3. Run repeatable, parent-resolved idempotent seeding
+      // 3. Introspect schema column names to ensure type-safe, column-safe inserts and updates
+      try {
+        const [colRows] = await this.pool.query(
+          "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+        );
+        this.schemaColumns = new Map();
+        for (const r of colRows) {
+          if (!this.schemaColumns.has(r.TABLE_NAME)) {
+            this.schemaColumns.set(r.TABLE_NAME, new Set());
+          }
+          this.schemaColumns.get(r.TABLE_NAME).add(r.COLUMN_NAME);
+        }
+      } catch (colErr) {
+        console.warn('[DB] Notice: Could not inspect INFORMATION_SCHEMA.COLUMNS, using static whitelist.');
+      }
+
+      // 4. Run repeatable, parent-resolved idempotent seeding
       await this.seedIfEmpty();
 
       this.isInitialized = true;
@@ -151,7 +201,19 @@ class DatabaseService {
       }
       if (typeof filter === 'object' && filter !== null) {
         return rows.filter(row => {
-          return Object.entries(filter).every(([k, v]) => row[k] === v);
+          return Object.entries(filter).every(([k, v]) => {
+            const rowVal = row[k];
+            if (typeof v === 'boolean') {
+              return Boolean(rowVal) === v;
+            }
+            if (typeof v === 'number' && typeof rowVal === 'string') {
+              return Number(rowVal) === v;
+            }
+            if (typeof v === 'string' && typeof rowVal === 'number') {
+              return String(rowVal) === v;
+            }
+            return rowVal === v;
+          });
         });
       }
       return rows;
@@ -159,7 +221,13 @@ class DatabaseService {
 
     if (typeof filter === 'object' && filter !== null && typeof filter !== 'function') {
       return localStore.find(table, row => {
-        return Object.entries(filter).every(([k, v]) => row[k] === v);
+        return Object.entries(filter).every(([k, v]) => {
+          const rowVal = row[k];
+          if (typeof v === 'boolean') return Boolean(rowVal) === v;
+          if (typeof v === 'number' && typeof rowVal === 'string') return Number(rowVal) === v;
+          if (typeof v === 'string' && typeof rowVal === 'number') return String(rowVal) === v;
+          return rowVal === v;
+        });
       });
     }
     return localStore.find(table, filter);
@@ -171,25 +239,30 @@ class DatabaseService {
   }
 
   async insert(table, data) {
-    const now = new Date().toISOString();
-    const row = {
-      ...data,
-      created_at: data.created_at || now,
-      updated_at: data.updated_at || now
-    };
+    const row = { ...data };
+    const hasCreatedAt = this.schemaColumns?.get(table)?.has('created_at') ?? TABLES_WITH_CREATED_AT.has(table);
+    const hasUpdatedAt = this.schemaColumns?.get(table)?.has('updated_at') ?? TABLES_WITH_UPDATED_AT.has(table);
+
+    if (hasCreatedAt && !row.created_at) {
+      row.created_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    }
+    if (hasUpdatedAt && !row.updated_at) {
+      row.updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    }
 
     if (this.mode === 'mysql') {
-      const keys = Object.keys(row);
-      const placeholders = keys.map(() => '?').join(', ');
-      const values = keys.map(k => {
+      const tableCols = this.schemaColumns?.get(table);
+      const validKeys = tableCols ? Object.keys(row).filter(k => tableCols.has(k)) : Object.keys(row);
+      const placeholders = validKeys.map(() => '?').join(', ');
+      const values = validKeys.map(k => {
         const val = row[k];
         if (typeof val === 'object' && val !== null) {
           return JSON.stringify(val);
         }
         return val;
       });
-      const updateClause = keys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
-      const sql = `INSERT INTO \`${table}\` (${keys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
+      const updateClause = validKeys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
+      const sql = `INSERT INTO \`${table}\` (${validKeys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
       await this.pool.query(sql, values);
       return row;
     }
@@ -200,16 +273,28 @@ class DatabaseService {
   async update(table, filter, updates) {
     if (this.mode === 'mysql') {
       const existing = await this.find(table, filter);
+      const hasUpdatedAt = this.schemaColumns?.get(table)?.has('updated_at') ?? TABLES_WITH_UPDATED_AT.has(table);
+      const tableCols = this.schemaColumns?.get(table);
+
       for (const item of existing) {
-        const updateKeys = Object.keys(updates);
-        const setClause = updateKeys.map(k => `\`${k}\` = ?`).join(', ');
+        let updateKeys = Object.keys(updates);
+        if (tableCols) {
+          updateKeys = updateKeys.filter(k => tableCols.has(k));
+        }
+        if (updateKeys.length === 0) continue;
+
+        let setClause = updateKeys.map(k => `\`${k}\` = ?`).join(', ');
+        if (hasUpdatedAt) {
+          setClause += ', `updated_at` = NOW()';
+        }
+
         const values = updateKeys.map(k => {
           const val = updates[k];
           if (typeof val === 'object' && val !== null) return JSON.stringify(val);
           return val;
         });
         values.push(item.id);
-        await this.pool.query(`UPDATE \`${table}\` SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
+        await this.pool.query(`UPDATE \`${table}\` SET ${setClause} WHERE id = ?`, values);
       }
       return existing.map(item => ({ ...item, ...updates }));
     }

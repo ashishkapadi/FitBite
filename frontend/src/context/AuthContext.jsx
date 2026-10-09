@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
+import { useNavigate } from 'react-router-dom';
 import { safeJson, apiFetch } from '../config/api';
 
 const AuthContext = createContext(null);
@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [sellerProfile, setSellerProfile] = useState(null);
   const [preferences, setPreferences] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   // Modal Control
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -83,17 +84,23 @@ export function AuthProvider({ children }) {
 
     closeAuthModal();
 
-    // Check if customer needs to complete onboarding
-    if (data.user.role === 'customer' && !data.user.onboarding_completed) {
-      setIsOnboardingModalOpen(true);
-    } else if (intendedAction) {
-      // Resume intended action
-      try {
-        intendedAction();
-      } catch (e) {
-        console.error('Error resuming intended action:', e);
+    // Enforce role-based redirect using actual authenticated role returned by the backend
+    if (data.user?.role === 'seller') {
+      navigate('/seller');
+    } else if (data.user?.role === 'admin') {
+      navigate('/admin');
+    } else if (data.user?.role === 'customer') {
+      if (!data.user.onboarding_completed) {
+        setIsOnboardingModalOpen(true);
+      } else if (intendedAction) {
+        // Safely resume customer intended action (e.g. add to cart) once
+        try {
+          intendedAction();
+        } catch (e) {
+          console.error('Error resuming intended action:', e);
+        }
+        setIntendedAction(null);
       }
-      setIntendedAction(null);
     }
 
     return data;
