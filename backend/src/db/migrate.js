@@ -1,13 +1,20 @@
 import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { SCHEMA_STATEMENTS, REQUIRED_TABLES } from './schema.js';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+export function getSanitizedDbUrl(rawUrl) {
+  if (!rawUrl) return 'localhost:3306/fitbite_db';
+  try {
+    const parsed = new URL(rawUrl);
+    const auth = parsed.username ? `${parsed.username}:****@` : '';
+    return `${parsed.protocol}//${auth}${parsed.host}${parsed.pathname}`;
+  } catch {
+    return 'via DATABASE_URL (sanitized)';
+  }
+}
 
 export function getDbConfig() {
   let config = {
@@ -17,7 +24,7 @@ export function getDbConfig() {
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'fitbite_db',
     multipleStatements: true,
-    connectTimeout: 10000
+    connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || (process.env.NODE_ENV === 'production' ? '15000' : '5000'), 10)
   };
 
   const isSslRequested = 
@@ -52,7 +59,7 @@ export function getDbConfig() {
       config.port = parseInt(parsed.port || '3306', 10);
       config.user = decodeURIComponent(parsed.username);
       config.password = decodeURIComponent(parsed.password);
-      config.database = parsed.pathname ? parsed.pathname.replace(/^\//, '') : 'fitbite_db';
+      config.database = parsed.pathname ? parsed.pathname.replace(/^\//, '') : 'defaultdb';
     } catch (err) {
       console.warn('[Migrate] Notice: Unable to parse DATABASE_URL as URL, falling back to individual parameters.', err.message);
     }
@@ -61,90 +68,88 @@ export function getDbConfig() {
   return config;
 }
 
-export async function runMigrations() {
+export async function runMigrations(existingPoolOrConnection = null) {
   const config = getDbConfig();
-  console.log(`[Migrate] Starting database migration for FitBite...`);
-  console.log(`[Migrate] Target host: ${config.host}:${config.port}, database: ${config.database}`);
+  console.log(`[Migrate] Initiating database schema check & migrations...`);
+  console.log(`[Migrate] Target database: ${config.database} on ${config.host}:${config.port} (SSL: ${config.ssl ? 'enabled' : 'disabled'})`);
 
-  let connection;
+  let connection = existingPoolOrConnection;
+  let ownConnection = false;
+
   try {
-    // First try connecting directly to the specified database
-    try {
-      connection = await mysql.createConnection(config);
-    } catch (dbErr) {
-      // If error is database doesn't exist (ER_BAD_DB_ERROR), try connecting without database and create it
-      if (dbErr.code === 'ER_BAD_DB_ERROR' || dbErr.errno === 1049) {
-        console.log(`[Migrate] Database '${config.database}' not found. Attempting to create it...`);
-        const rootConfig = { ...config };
-        delete rootConfig.database;
-        const rootConn = await mysql.createConnection(rootConfig);
-        await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-        await rootConn.end();
+    if (!connection) {
+      try {
         connection = await mysql.createConnection(config);
-      } else {
-        throw dbErr;
+        ownConnection = true;
+      } catch (connErr) {
+        // If the database doesn't exist on local dev (ER_BAD_DB_ERROR), create it
+        if (connErr.code === 'ER_BAD_DB_ERROR' || connErr.errno === 1049) {
+          console.log(`[Migrate] Database '${config.database}' not found. Attempting to create it...`);
+          const rootConfig = { ...config };
+          delete rootConfig.database;
+          const rootConn = await mysql.createConnection(rootConfig);
+          await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+          await rootConn.end();
+          connection = await mysql.createConnection(config);
+          ownConnection = true;
+        } else {
+          throw connErr;
+        }
       }
     }
 
-    console.log(`[Migrate] Connected to MySQL successfully.`);
+    console.log(`[Migrate] Connected to MySQL. Executing ${SCHEMA_STATEMENTS.length} DDL statements in dependency order...`);
 
-    const schemaPath = path.resolve(__dirname, '../../../database/schema.sql');
-    if (!fs.existsSync(schemaPath)) {
-      throw new Error(`Schema file not found at ${schemaPath}`);
-    }
-
-    const rawSql = fs.readFileSync(schemaPath, 'utf8');
-
-    // Split SQL into individual statements, removing CREATE DATABASE / USE to be safe across hosted providers
-    const statements = rawSql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => {
-        if (!s) return false;
-        const upper = s.toUpperCase();
-        if (upper.startsWith('CREATE DATABASE') || upper.startsWith('USE ')) {
-          return false;
-        }
-        return true;
-      });
-
-    console.log(`[Migrate] Executing ${statements.length} DDL statements...`);
-
-    for (let i = 0; i < statements.length; i++) {
-      const stmt = statements[i];
+    for (let i = 0; i < SCHEMA_STATEMENTS.length; i++) {
+      const stmt = SCHEMA_STATEMENTS[i].trim();
+      if (!stmt) continue;
       try {
         await connection.query(stmt);
       } catch (stmtErr) {
-        // Log warning for non-fatal statement errors
-        console.warn(`[Migrate] Statement ${i + 1} warning: ${stmtErr.message}`);
+        console.error(`[Migrate Error] Failed statement ${i + 1}: ${stmtErr.message}`);
+        throw new Error(`Migration statement ${i + 1} failed (${stmtErr.code || stmtErr.message})`);
       }
     }
 
-    console.log(`[Migrate] All table migrations applied successfully!`);
+    // Verify all required tables exist in the target database
+    const [rows] = await connection.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = ?`,
+      [config.database]
+    );
+    const existingTableNames = new Set(rows.map(r => (r.table_name || r.TABLE_NAME).toLowerCase()));
 
-    // Check if --seed flag passed
-    const args = process.argv.slice(2);
-    if (args.includes('--seed')) {
-      console.log(`[Migrate] Seeding initial data...`);
-      const { db } = await import('./db.js');
-      await db.init();
-      await db.seedIfEmpty();
+    const missingTables = REQUIRED_TABLES.filter(t => !existingTableNames.has(t.toLowerCase()));
+    if (missingTables.length > 0) {
+      throw new Error(`Migration verification failed: Missing tables [${missingTables.join(', ')}] in database '${config.database}'`);
     }
 
-    console.log(`[Migrate] Migration process finished.`);
+    console.log(`[Migrate] Verification passed: All ${REQUIRED_TABLES.length} tables confirmed ready in '${config.database}'.`);
+    return true;
   } catch (err) {
-    console.error(`[Migrate Error] Migration failed (${err.code || 'UNKNOWN'}):`, err.message || err);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
+    console.error(`[Migrate Critical] Migration failed:`, err.message);
+    throw err;
   } finally {
-    if (connection) {
+    if (ownConnection && connection) {
       await connection.end();
     }
   }
 }
 
-// Auto-run if executed directly
-if (process.argv[1] && process.argv[1].endsWith('migrate.js')) {
-  runMigrations();
+// Auto-run if executed directly via CLI
+if (process.argv[1] && (process.argv[1].endsWith('migrate.js') || process.argv[1].endsWith('migrate'))) {
+  (async () => {
+    try {
+      await runMigrations();
+      if (process.argv.includes('--seed')) {
+        console.log(`[Migrate] Running seed data...`);
+        const { db } = await import('./db.js');
+        await db.init();
+      }
+      console.log(`[Migrate] CLI migration completed successfully.`);
+      process.exit(0);
+    } catch (e) {
+      console.error(`[Migrate] CLI migration aborted:`, e.message);
+      process.exit(1);
+    }
+  })();
 }

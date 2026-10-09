@@ -317,9 +317,9 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
     plan_type ENUM('working_professional', 'student') NOT NULL,
     name VARCHAR(120) NOT NULL,
     description TEXT NOT NULL,
-    cycle_days INT NOT NULL, -- 28 for professional, calculated weekdays for student
+    cycle_days INT NOT NULL,
     delivery_frequency ENUM('daily', 'weekdays_only') NOT NULL,
-    supported_slots JSON NOT NULL, -- ['lunch', 'dinner', 'both']
+    supported_slots JSON NOT NULL,
     base_price_per_meal DECIMAL(10, 2) NOT NULL,
     plan_discount_percent DECIMAL(5, 2) DEFAULT 15.00,
     max_skips_allowed INT DEFAULT 2,

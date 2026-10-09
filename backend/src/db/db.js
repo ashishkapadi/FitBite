@@ -2,6 +2,7 @@ import fs from 'fs';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { localStore } from './localStore.js';
+import { runMigrations, getDbConfig, getSanitizedDbUrl } from './migrate.js';
 import {
   SEED_USERS,
   SEED_CUSTOMER_PROFILES,
@@ -18,36 +19,6 @@ import { generateDailyTiffinMenus } from './menusSeed.js';
 
 dotenv.config();
 
-function getSslConfig() {
-  const isSslRequested = 
-    process.env.DB_SSL === 'true' || 
-    process.env.DB_SSL === '1' ||
-    (process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('ssl=') || process.env.DATABASE_URL.includes('ssl-mode=')));
-
-  if (!isSslRequested) return undefined;
-
-  const ssl = {
-    rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true'
-  };
-
-  // Support custom CA Certificate via file path or inline PEM string
-  const caCert = process.env.DB_CA_CERT || process.env.DB_SSL_CA;
-  if (caCert) {
-    try {
-      if (fs.existsSync(caCert)) {
-        ssl.ca = fs.readFileSync(caCert, 'utf8');
-      } else if (caCert.includes('-----BEGIN CERTIFICATE-----')) {
-        ssl.ca = caCert;
-      }
-      ssl.rejectUnauthorized = true;
-    } catch (caErr) {
-      console.warn('[DB] Warning: Could not read DB_CA_CERT:', caErr.message);
-    }
-  }
-
-  return ssl;
-}
-
 class DatabaseService {
   constructor() {
     this.mode = 'local'; // 'mysql' or 'local'
@@ -58,55 +29,21 @@ class DatabaseService {
   async init() {
     if (this.isInitialized) return;
 
-    localStore.init();
-
-    // Check if MySQL connection is available
-    let host = process.env.DB_HOST || 'localhost';
-    let port = parseInt(process.env.DB_PORT || '3306', 10);
-    let user = process.env.DB_USER || 'root';
-    let password = process.env.DB_PASSWORD || '';
-    let database = process.env.DB_NAME || 'fitbite_db';
-    let ssl = getSslConfig();
-
-    if (process.env.DATABASE_URL) {
-      try {
-        const parsed = new URL(process.env.DATABASE_URL);
-        host = parsed.hostname;
-        port = parseInt(parsed.port || '3306', 10);
-        user = decodeURIComponent(parsed.username);
-        password = decodeURIComponent(parsed.password);
-        database = parsed.pathname ? parsed.pathname.replace(/^\//, '') : 'fitbite_db';
-      } catch (err) {
-        console.warn('[DB] Failed to parse DATABASE_URL, using individual parameters:', err.message);
-      }
-    }
+    const config = getDbConfig();
+    const fallbackExplicitlyDisabled = process.env.ENABLE_LOCAL_JSON_FALLBACK === 'false' || process.env.ENABLE_LOCAL_JSON_FALLBACK === '0';
+    const isProduction = process.env.NODE_ENV === 'production';
+    const allowFallback = !fallbackExplicitlyDisabled && (process.env.ENABLE_LOCAL_JSON_FALLBACK === 'true' || !isProduction);
 
     try {
-      // Connect and verify database exists
-      const connectTimeout = parseInt(process.env.DB_CONNECT_TIMEOUT || (process.env.NODE_ENV === 'production' ? '10000' : '2000'), 10);
-      try {
-        const connection = await mysql.createConnection({
-          host,
-          port,
-          user,
-          password,
-          ssl,
-          connectTimeout
-        });
-        await connection.query(`CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-        await connection.end();
-      } catch (dbCreateErr) {
-        // Some managed databases (e.g. TiDB, Aiven, Railway, AWS RDS restricted users) disallow CREATE DATABASE
-        // This is safe to ignore if the database already exists
-      }
+      console.log(`[DB] Connecting to MySQL at ${config.host}:${config.port}/${config.database} (SSL: ${config.ssl ? 'enabled' : 'disabled'})...`);
 
       this.pool = mysql.createPool({
-        host,
-        port,
-        user,
-        password,
-        database,
-        ssl,
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        password: config.password,
+        database: config.database,
+        ssl: config.ssl,
         waitForConnections: true,
         connectionLimit: parseInt(process.env.DB_POOL_LIMIT || '10', 10),
         queueLimit: 0,
@@ -114,28 +51,38 @@ class DatabaseService {
         keepAliveInitialDelay: 10000
       });
 
-      // Test connection
+      // 1. Verify basic connection
       const [rows] = await this.pool.query('SELECT 1 as test');
-      if (rows && rows.length > 0) {
-        this.mode = 'mysql';
-        console.log(`[DB] Successfully connected to MySQL at ${host}:${port}/${database} (SSL: ${ssl ? 'enabled' : 'disabled'})`);
+      if (!rows || rows.length === 0) {
+        throw new Error('MySQL connectivity test query returned empty result.');
       }
-    } catch (err) {
-      const fallbackExplicitlyDisabled = process.env.ENABLE_LOCAL_JSON_FALLBACK === 'false' || process.env.ENABLE_LOCAL_JSON_FALLBACK === '0';
-      const isProduction = process.env.NODE_ENV === 'production';
 
-      if (fallbackExplicitlyDisabled || (isProduction && process.env.ENABLE_LOCAL_JSON_FALLBACK !== 'true')) {
-        console.error(`[DB CRITICAL] MySQL connection failed to ${host}:${port}/${database}:`, err.message);
-        throw new Error(`[DB CRITICAL] Database connection failed (${err.code || err.message}). ENABLE_LOCAL_JSON_FALLBACK is false. Server refusing to start without real database connection.`);
+      this.mode = 'mysql';
+      console.log(`[DB] MySQL connection established successfully.`);
+
+      // 2. Run schema migrations in dependency order
+      console.log(`[DB] Running database migrations on '${config.database}'...`);
+      await runMigrations(this.pool);
+
+      // 3. Run repeatable, idempotent seeding
+      await this.seedIfEmpty();
+
+      this.isInitialized = true;
+      console.log(`[DB] Database initialization complete in MYSQL mode.`);
+    } catch (err) {
+      if (!allowFallback) {
+        console.error(`[DB CRITICAL] Database initialization failed on ${config.host}:${config.port}/${config.database}:`, err.message);
+        throw new Error(`[DB CRITICAL] MySQL initialization failed: ${err.message}. ENABLE_LOCAL_JSON_FALLBACK is false. Server refusing to start without real database.`);
       }
+
+      console.warn(`[DB] Notice: MySQL server connection/migration not available (${err.code || err.message}).`);
+      console.log(`[DB] Using local JSON storage fallback (ENABLE_LOCAL_JSON_FALLBACK=true for offline local development).`);
 
       this.mode = 'local';
-      console.log(`[DB] Notice: MySQL server not connected (${err.code || err.message}).`);
-      console.log(`[DB] Using local JSON storage fallback (ENABLE_LOCAL_JSON_FALLBACK=true).`);
+      localStore.init();
+      await this.seedIfEmpty();
+      this.isInitialized = true;
     }
-
-    await this.seedIfEmpty();
-    this.isInitialized = true;
   }
 
   getMode() {
@@ -144,21 +91,16 @@ class DatabaseService {
 
   async find(table, filter = () => true) {
     if (this.mode === 'mysql') {
-      try {
-        const [rows] = await this.pool.query(`SELECT * FROM \`${table}\``);
-        if (typeof filter === 'function') {
-          return rows.filter(filter);
-        }
-        if (typeof filter === 'object' && filter !== null) {
-          return rows.filter(row => {
-            return Object.entries(filter).every(([k, v]) => row[k] === v);
-          });
-        }
-        return rows;
-      } catch (err) {
-        console.error(`[DB MySQL Error] find in ${table}:`, err.message);
-        return localStore.find(table, filter);
+      const [rows] = await this.pool.query(`SELECT * FROM \`${table}\``);
+      if (typeof filter === 'function') {
+        return rows.filter(filter);
       }
+      if (typeof filter === 'object' && filter !== null) {
+        return rows.filter(row => {
+          return Object.entries(filter).every(([k, v]) => row[k] === v);
+        });
+      }
+      return rows;
     }
 
     if (typeof filter === 'object' && filter !== null && typeof filter !== 'function') {
@@ -183,25 +125,19 @@ class DatabaseService {
     };
 
     if (this.mode === 'mysql') {
-      try {
-        const keys = Object.keys(row);
-        const placeholders = keys.map(() => '?').join(', ');
-        const values = keys.map(k => {
-          const val = row[k];
-          if (typeof val === 'object' && val !== null) {
-            return JSON.stringify(val);
-          }
-          return val;
-        });
-        const sql = `INSERT INTO \`${table}\` (${keys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders})`;
-        await this.pool.query(sql, values);
-        // Also keep localStore in sync
-        localStore.insert(table, row);
-        return row;
-      } catch (err) {
-        console.error(`[DB MySQL Error] insert into ${table}:`, err.message);
-        return localStore.insert(table, row);
-      }
+      const keys = Object.keys(row);
+      const placeholders = keys.map(() => '?').join(', ');
+      const values = keys.map(k => {
+        const val = row[k];
+        if (typeof val === 'object' && val !== null) {
+          return JSON.stringify(val);
+        }
+        return val;
+      });
+      const updateClause = keys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
+      const sql = `INSERT INTO \`${table}\` (${keys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
+      await this.pool.query(sql, values);
+      return row;
     }
 
     return localStore.insert(table, row);
@@ -209,32 +145,19 @@ class DatabaseService {
 
   async update(table, filter, updates) {
     if (this.mode === 'mysql') {
-      try {
-        const existing = await this.find(table, filter);
-        for (const item of existing) {
-          const updateKeys = Object.keys(updates);
-          const setClause = updateKeys.map(k => `\`${k}\` = ?`).join(', ');
-          const values = updateKeys.map(k => {
-            const val = updates[k];
-            if (typeof val === 'object' && val !== null) return JSON.stringify(val);
-            return val;
-          });
-          values.push(item.id);
-          await this.pool.query(`UPDATE \`${table}\` SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
-        }
-        return localStore.update(
-          table,
-          typeof filter === 'function' ? filter : row => Object.entries(filter).every(([k, v]) => row[k] === v),
-          updates
-        );
-      } catch (err) {
-        console.error(`[DB MySQL Error] update ${table}:`, err.message);
-        return localStore.update(
-          table,
-          typeof filter === 'function' ? filter : row => Object.entries(filter).every(([k, v]) => row[k] === v),
-          updates
-        );
+      const existing = await this.find(table, filter);
+      for (const item of existing) {
+        const updateKeys = Object.keys(updates);
+        const setClause = updateKeys.map(k => `\`${k}\` = ?`).join(', ');
+        const values = updateKeys.map(k => {
+          const val = updates[k];
+          if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+          return val;
+        });
+        values.push(item.id);
+        await this.pool.query(`UPDATE \`${table}\` SET ${setClause}, updated_at = NOW() WHERE id = ?`, values);
       }
+      return existing.map(item => ({ ...item, ...updates }));
     }
 
     return localStore.update(
@@ -246,22 +169,11 @@ class DatabaseService {
 
   async delete(table, filter) {
     if (this.mode === 'mysql') {
-      try {
-        const existing = await this.find(table, filter);
-        for (const item of existing) {
-          await this.pool.query(`DELETE FROM \`${table}\` WHERE id = ?`, [item.id]);
-        }
-        return localStore.delete(
-          table,
-          typeof filter === 'function' ? filter : row => Object.entries(filter).every(([k, v]) => row[k] === v)
-        );
-      } catch (err) {
-        console.error(`[DB MySQL Error] delete from ${table}:`, err.message);
-        return localStore.delete(
-          table,
-          typeof filter === 'function' ? filter : row => Object.entries(filter).every(([k, v]) => row[k] === v)
-        );
+      const existing = await this.find(table, filter);
+      for (const item of existing) {
+        await this.pool.query(`DELETE FROM \`${table}\` WHERE id = ?`, [item.id]);
       }
+      return existing;
     }
 
     return localStore.delete(
@@ -275,70 +187,94 @@ class DatabaseService {
     return list.length;
   }
 
-  async seedIfEmpty() {
-    const userCount = await this.count('users');
-    if (userCount > 0) {
-      console.log(`[DB] Database already contains ${userCount} users. Skipping seed.`);
-      return;
+  /**
+   * Helper to perform idempotent inserts across both MySQL and localStore
+   */
+  async upsertEntity(table, data, primaryKey = 'id') {
+    if (this.mode === 'mysql') {
+      const keys = Object.keys(data);
+      const placeholders = keys.map(() => '?').join(', ');
+      const values = keys.map(k => {
+        const val = data[k];
+        if (typeof val === 'object' && val !== null) {
+          return JSON.stringify(val);
+        }
+        return val;
+      });
+      // Do not overwrite passwords or user created dates on duplicate key
+      const updateKeys = keys.filter(k => k !== primaryKey && k !== 'password_hash' && k !== 'created_at');
+      const updateClause = updateKeys.length > 0 
+        ? updateKeys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ')
+        : `\`${primaryKey}\` = \`${primaryKey}\``;
+
+      const sql = `INSERT INTO \`${table}\` (${keys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
+      await this.pool.query(sql, values);
+    } else {
+      const existing = localStore.findOne(table, row => row[primaryKey] === data[primaryKey]);
+      if (!existing) {
+        localStore.insert(table, data);
+      }
     }
+  }
 
-    console.log('[DB] Seeding database with initial FitBite demonstration data...');
+  async seedIfEmpty() {
+    console.log('[DB] Checking seed state across all core tables...');
 
-    // 1. Users
+    // 1. Users (Idempotent upsert - preserves existing passwords)
     for (const u of SEED_USERS) {
-      await this.insert('users', u);
+      await this.upsertEntity('users', u, 'id');
     }
 
     // 2. Customer Profiles
     for (const cp of SEED_CUSTOMER_PROFILES) {
-      await this.insert('customer_profiles', cp);
+      await this.upsertEntity('customer_profiles', cp, 'id');
     }
 
     // 3. Customer Preferences
     for (const pref of SEED_CUSTOMER_PREFERENCES) {
-      await this.insert('customer_preferences', pref);
+      await this.upsertEntity('customer_preferences', pref, 'id');
     }
 
     // 4. Addresses
     for (const addr of SEED_ADDRESSES) {
-      await this.insert('addresses', addr);
+      await this.upsertEntity('addresses', addr, 'id');
     }
 
     // 5. Sellers
     for (const s of SEED_SELLERS) {
-      await this.insert('seller_profiles', s);
+      await this.upsertEntity('seller_profiles', s, 'id');
     }
 
     // 6. Categories
     for (const c of SEED_CATEGORIES) {
-      await this.insert('categories', c);
+      await this.upsertEntity('categories', c, 'id');
     }
 
     // 7. Customization Options
     for (const opt of SEED_CUSTOMIZATION_OPTIONS) {
-      await this.insert('customization_options', opt);
+      await this.upsertEntity('customization_options', opt, 'id');
     }
 
     // 8. Meals (62+ dishes)
     for (const m of SEED_MEALS) {
-      await this.insert('meals', m);
+      await this.upsertEntity('meals', m, 'id');
     }
 
     // 9. Subscription Plans
     for (const sp of SEED_SUBSCRIPTION_PLANS) {
-      await this.insert('subscription_plans', sp);
+      await this.upsertEntity('subscription_plans', sp, 'id');
     }
 
     // 10. Coupons
     for (const cpn of SEED_COUPONS) {
-      await this.insert('coupons', cpn);
+      await this.upsertEntity('coupons', cpn, 'id');
     }
 
     // 11. Daily Rotating Menus for 28 days
     const activeTiffinSellers = ['seller_01', 'seller_03', 'seller_04', 'seller_05'];
     const menus = generateDailyTiffinMenus(activeTiffinSellers, SEED_MEALS);
     for (const m of menus) {
-      await this.insert('daily_tiffin_menus', m);
+      await this.upsertEntity('daily_tiffin_menus', m, 'id');
     }
 
     // 12. Sample active subscription for demo customer
@@ -362,7 +298,7 @@ class DatabaseService {
       meals_delivered_count: 6,
       meals_skipped_count: 1,
       max_skips_allowed: 2,
-      price_per_meal: 106.25, // discounted
+      price_per_meal: 106.25,
       subtotal: 5950.00,
       discount_amount: 1050.00,
       delivery_fee: 0.00,
@@ -371,7 +307,7 @@ class DatabaseService {
       status: 'active',
       payment_status: 'paid'
     };
-    await this.insert('subscriptions', sampleSub);
+    await this.upsertEntity('subscriptions', sampleSub, 'id');
 
     // 13. Scheduled deliveries for sample subscription (28 days)
     for (let day = 0; day < 28; day++) {
@@ -382,7 +318,7 @@ class DatabaseService {
       const isSkipped = day === 1;
 
       // Lunch delivery
-      await this.insert('scheduled_deliveries', {
+      await this.upsertEntity('scheduled_deliveries', {
         id: `sched_sub01_${dStr}_lunch`,
         subscription_id: 'sub_demo_01',
         delivery_date: dStr,
@@ -394,10 +330,10 @@ class DatabaseService {
         is_skipped: isSkipped,
         skip_reason: isSkipped ? 'Traveling on Tuesday' : null,
         delivered_at: isPast && !isSkipped ? `${dStr} 13:10:00` : null
-      });
+      }, 'id');
 
       // Dinner delivery
-      await this.insert('scheduled_deliveries', {
+      await this.upsertEntity('scheduled_deliveries', {
         id: `sched_sub01_${dStr}_dinner`,
         subscription_id: 'sub_demo_01',
         delivery_date: dStr,
@@ -409,10 +345,10 @@ class DatabaseService {
         is_skipped: isSkipped,
         skip_reason: isSkipped ? 'Traveling on Tuesday' : null,
         delivered_at: isPast && !isSkipped ? `${dStr} 20:25:00` : null
-      });
+      }, 'id');
     }
 
-    // 14. Sample completed and live orders for customer
+    // 14. Sample completed order for demo customer
     const sampleOrder1 = {
       id: 'ord_demo_01',
       order_number: 'FB-ORD-9011',
@@ -436,9 +372,9 @@ class DatabaseService {
       exchange_steel_dabba: true,
       delivery_instructions: 'Ring bell once. Please place box on doorstep hook.'
     };
-    await this.insert('orders', sampleOrder1);
+    await this.upsertEntity('orders', sampleOrder1, 'id');
 
-    await this.insert('order_items', {
+    await this.upsertEntity('order_items', {
       id: 'oi_01',
       order_id: 'ord_demo_01',
       meal_id: 'meal_007',
@@ -456,9 +392,9 @@ class DatabaseService {
       unit_final_price: 171.50,
       item_total_price: 343.00,
       special_notes: 'Extra fresh phulkas please'
-    });
+    }, 'id');
 
-    await this.insert('delivery_tracking_events', {
+    await this.upsertEntity('delivery_tracking_events', {
       id: 'track_01',
       order_id: 'ord_demo_01',
       event_status: 'confirmed',
@@ -466,9 +402,9 @@ class DatabaseService {
       description: 'Annapurna Homestyle Tiffin Ghar accepted your order.',
       latitude: 12.9716,
       longitude: 77.5946
-    });
+    }, 'id');
 
-    await this.insert('delivery_tracking_events', {
+    await this.upsertEntity('delivery_tracking_events', {
       id: 'track_02',
       order_id: 'ord_demo_01',
       event_status: 'preparing',
@@ -476,9 +412,9 @@ class DatabaseService {
       description: 'Chef is preparing your fresh meal with requested customizations.',
       latitude: 12.9716,
       longitude: 77.5946
-    });
+    }, 'id');
 
-    await this.insert('delivery_tracking_events', {
+    await this.upsertEntity('delivery_tracking_events', {
       id: 'track_03',
       order_id: 'ord_demo_01',
       event_status: 'out_for_delivery',
@@ -486,10 +422,10 @@ class DatabaseService {
       description: 'Rider Vikram Jadhav is on the way with your hot meal in insulated dabba bag.',
       latitude: 12.9780,
       longitude: 77.6350
-    });
+    }, 'id');
 
     // 15. Audit Log
-    await this.insert('audit_logs', {
+    await this.upsertEntity('audit_logs', {
       id: 'audit_01',
       actor_id: 'user_admin_01',
       actor_email: 'admin@fitbite.demo',
@@ -497,9 +433,9 @@ class DatabaseService {
       entity_type: 'platform',
       entity_id: 'fitbite_core',
       details: { message: 'FitBite system seeded and initialized successfully.' }
-    });
+    }, 'id');
 
-    console.log('[DB] Seeding completed successfully! 62 meals, 8 kitchens, 20 categories, demo accounts created.');
+    console.log('[DB] Seeding verification complete: All seed records confirmed ready.');
   }
 }
 

@@ -164,10 +164,16 @@ app.use((err, req, res, next) => {
   });
 });
 
+import { getSanitizedDbUrl } from './db/migrate.js';
+
 function validateEnvironment() {
   console.log(`[Config] Node Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`[Config] Database Host: ${process.env.DB_HOST || (process.env.DATABASE_URL ? 'via DATABASE_URL' : 'localhost')}`);
-  console.log(`[Config] Java Meal Planner URL: ${process.env.JAVA_MEAL_PLANNER_URL || 'http://localhost:8082'}`);
+  const dbTarget = process.env.DATABASE_URL 
+    ? getSanitizedDbUrl(process.env.DATABASE_URL)
+    : `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '3306'}/${process.env.DB_NAME || 'fitbite_db'}`;
+  console.log(`[Config] Database Target: ${dbTarget}`);
+  console.log(`[Config] Fallback JSON Storage Enabled: ${process.env.ENABLE_LOCAL_JSON_FALLBACK === 'true'}`);
+  console.log(`[Config] Java Meal Planner URL: ${process.env.JAVA_MEAL_PLANNER_URL || '(not set - using local deterministic engine)'}`);
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.includes('dev-jwt-secret')) {
       console.warn('[SECURITY WARNING] Using default or insecure JWT_SECRET in production! Please configure a unique JWT_SECRET.');
