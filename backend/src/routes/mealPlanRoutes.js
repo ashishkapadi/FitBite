@@ -4,7 +4,11 @@ import { db } from '../db/db.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
-const JAVA_SERVICE_URL = process.env.MEAL_PLANNER_SERVICE_URL || 'http://localhost:8082';
+
+const rawJavaUrl = process.env.JAVA_MEAL_PLANNER_URL || process.env.MEAL_PLANNER_SERVICE_URL || 'http://localhost:8082';
+const JAVA_SERVICE_URL = rawJavaUrl.startsWith('http://') || rawJavaUrl.startsWith('https://') 
+  ? rawJavaUrl.replace(/\/+$/, '') 
+  : `https://${rawJavaUrl.replace(/\/+$/, '')}`;
 
 // Local deterministic rule engine fallback if Java service is offline
 function generateLocalDeterministicMealPlan(request) {
@@ -204,26 +208,51 @@ router.post('/generate', async (req, res) => {
       availableMeals: catalogMealDtos
     };
 
-    // Try calling Java Spring Boot service first
+    // Try calling Java Spring Boot service if configured or available
+    let javaServiceSuccess = false;
+    let javaPlanData = null;
+
+    const isJavaUrlExplicitlyConfigured = Boolean(process.env.JAVA_MEAL_PLANNER_URL || process.env.MEAL_PLANNER_SERVICE_URL);
+
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (process.env.PLANNER_SHARED_SECRET) {
+        headers['X-Internal-Service-Key'] = process.env.PLANNER_SHARED_SECRET;
+        headers['Authorization'] = `Bearer ${process.env.PLANNER_SHARED_SECRET}`;
+      }
+
       const javaResponse = await axios.post(`${JAVA_SERVICE_URL}/api/meal-plans/generate`, javaPayload, {
-        timeout: 3000
+        headers,
+        timeout: 4000
       });
+
       if (javaResponse.status === 200 && javaResponse.data) {
-        return res.json({
-          ...javaResponse.data,
-          source_service: 'java_spring_boot_service'
-        });
+        javaServiceSuccess = true;
+        javaPlanData = javaResponse.data;
       }
     } catch (javaErr) {
-      // Graceful fallback to deterministic local engine so frontend NEVER fails
-      console.log(`[MealPlan] Notice: Java service at ${JAVA_SERVICE_URL} not responding (${javaErr.message}). Using local deterministic rule engine.`);
+      if (isJavaUrlExplicitlyConfigured) {
+        console.log(`[MealPlan] Java Planner service at ${JAVA_SERVICE_URL} did not respond (${javaErr.message}). Using local deterministic rule engine.`);
+      } else {
+        console.log(`[MealPlan] Java service URL not yet configured on Render. Using local deterministic rule engine.`);
+      }
+    }
+
+    if (javaServiceSuccess && javaPlanData) {
+      return res.json({
+        ...javaPlanData,
+        planner_mode: 'java_spring_boot_service',
+        java_service_active: true,
+        java_url_configured: isJavaUrlExplicitlyConfigured
+      });
     }
 
     const localPlan = generateLocalDeterministicMealPlan(javaPayload);
     return res.json({
       ...localPlan,
-      source_service: 'local_deterministic_engine'
+      planner_mode: 'local_deterministic_engine',
+      java_service_active: false,
+      java_url_configured: isJavaUrlExplicitlyConfigured
     });
   } catch (err) {
     console.error('Generate meal plan error:', err);

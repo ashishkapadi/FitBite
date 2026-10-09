@@ -20,8 +20,29 @@ export function getDbConfig() {
     connectTimeout: 10000
   };
 
-  if (process.env.DB_SSL === 'true') {
-    config.ssl = { rejectUnauthorized: false };
+  const isSslRequested = 
+    process.env.DB_SSL === 'true' || 
+    process.env.DB_SSL === '1' ||
+    (process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('ssl=') || process.env.DATABASE_URL.includes('ssl-mode=')));
+
+  if (isSslRequested) {
+    config.ssl = {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true'
+    };
+
+    const caCert = process.env.DB_CA_CERT || process.env.DB_SSL_CA;
+    if (caCert) {
+      try {
+        if (fs.existsSync(caCert)) {
+          config.ssl.ca = fs.readFileSync(caCert, 'utf8');
+        } else if (caCert.includes('-----BEGIN CERTIFICATE-----')) {
+          config.ssl.ca = caCert;
+        }
+        config.ssl.rejectUnauthorized = true;
+      } catch (caErr) {
+        console.warn('[Migrate] Warning: Could not read DB_CA_CERT:', caErr.message);
+      }
+    }
   }
 
   if (process.env.DATABASE_URL) {
@@ -32,9 +53,6 @@ export function getDbConfig() {
       config.user = decodeURIComponent(parsed.username);
       config.password = decodeURIComponent(parsed.password);
       config.database = parsed.pathname ? parsed.pathname.replace(/^\//, '') : 'fitbite_db';
-      if (parsed.searchParams.get('ssl') === 'true' || parsed.searchParams.get('ssl-mode') || process.env.DB_SSL === 'true') {
-        config.ssl = { rejectUnauthorized: false };
-      }
     } catch (err) {
       console.warn('[Migrate] Notice: Unable to parse DATABASE_URL as URL, falling back to individual parameters.', err.message);
     }

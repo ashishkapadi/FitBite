@@ -6,16 +6,12 @@ services:
     name: fitbite-api
     runtime: node
     rootDir: backend
-    plan: starter
+    plan: free
     region: oregon
     buildCommand: npm install
     startCommand: node src/server.js
     healthCheckPath: /health
     autoDeploy: true
-    disk:
-      name: fitbite-uploads
-      mountPath: /var/data/uploads
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
@@ -31,17 +27,19 @@ services:
         value: 7d
       - key: DATABASE_URL
         sync: false
-      - key: ENABLE_LOCAL_JSON_FALLBACK
+      - key: DB_SSL
         value: "true"
+      - key: ENABLE_LOCAL_JSON_FALLBACK
+        value: "false"
+      # Note: Render Free tier does not support private internal networking.
+      # Set this to the public HTTPS URL assigned to fitbite-meal-planner (e.g. https://fitbite-meal-planner.onrender.com)
       - key: JAVA_MEAL_PLANNER_URL
-        fromService:
-          type: web
-          name: fitbite-meal-planner
-          property: host
+        sync: false
+      # Server-to-server shared secret to protect public Java planner non-health endpoints
+      - key: PLANNER_SHARED_SECRET
+        generateValue: true
       - key: STORAGE_PROVIDER
         value: local
-      - key: UPLOADS_DIR
-        value: /var/data/uploads
       - key: PAYMENT_PROVIDER_MODE
         value: demo
 
@@ -53,7 +51,7 @@ services:
     runtime: docker
     rootDir: meal-planner-service
     dockerfilePath: Dockerfile
-    plan: starter
+    plan: free
     region: oregon
     healthCheckPath: /health
     autoDeploy: true
@@ -64,3 +62,7 @@ services:
         value: "-Xmx384m -Xms128m"
       - key: FITBITE_PLANNER_RULES_ENABLED
         value: "true"
+      # Copy the generated PLANNER_SHARED_SECRET from fitbite-api into this service's environment
+      - key: PLANNER_SHARED_SECRET
+        sync: false
+

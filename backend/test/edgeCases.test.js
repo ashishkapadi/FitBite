@@ -19,14 +19,21 @@ describe('FitBite Comprehensive Edge Cases Suite', () => {
   let otherKitchenMeal = null;
 
   before(async () => {
-    try {
-      const probe = await fetch('http://localhost:5000/health').catch(() => null);
-      if (!probe || !probe.ok) {
-        await import('../src/server.js');
-        await new Promise(resolve => setTimeout(resolve, 1200));
+    const probeHealth = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/health');
+        return res.ok;
+      } catch {
+        return false;
       }
-    } catch (e) {
-      console.warn('Server initialization in test:', e.message);
+    };
+
+    if (!(await probeHealth())) {
+      await import('../src/server.js');
+      for (let i = 0; i < 25; i++) {
+        if (await probeHealth()) break;
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
     await db.init();
 

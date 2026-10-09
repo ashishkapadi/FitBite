@@ -1,3 +1,4 @@
+import fs from 'fs';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { localStore } from './localStore.js';
@@ -17,6 +18,36 @@ import { generateDailyTiffinMenus } from './menusSeed.js';
 
 dotenv.config();
 
+function getSslConfig() {
+  const isSslRequested = 
+    process.env.DB_SSL === 'true' || 
+    process.env.DB_SSL === '1' ||
+    (process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('ssl=') || process.env.DATABASE_URL.includes('ssl-mode=')));
+
+  if (!isSslRequested) return undefined;
+
+  const ssl = {
+    rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true'
+  };
+
+  // Support custom CA Certificate via file path or inline PEM string
+  const caCert = process.env.DB_CA_CERT || process.env.DB_SSL_CA;
+  if (caCert) {
+    try {
+      if (fs.existsSync(caCert)) {
+        ssl.ca = fs.readFileSync(caCert, 'utf8');
+      } else if (caCert.includes('-----BEGIN CERTIFICATE-----')) {
+        ssl.ca = caCert;
+      }
+      ssl.rejectUnauthorized = true;
+    } catch (caErr) {
+      console.warn('[DB] Warning: Could not read DB_CA_CERT:', caErr.message);
+    }
+  }
+
+  return ssl;
+}
+
 class DatabaseService {
   constructor() {
     this.mode = 'local'; // 'mysql' or 'local'
@@ -35,7 +66,7 @@ class DatabaseService {
     let user = process.env.DB_USER || 'root';
     let password = process.env.DB_PASSWORD || '';
     let database = process.env.DB_NAME || 'fitbite_db';
-    let ssl = process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined;
+    let ssl = getSslConfig();
 
     if (process.env.DATABASE_URL) {
       try {
@@ -45,9 +76,6 @@ class DatabaseService {
         user = decodeURIComponent(parsed.username);
         password = decodeURIComponent(parsed.password);
         database = parsed.pathname ? parsed.pathname.replace(/^\//, '') : 'fitbite_db';
-        if (parsed.searchParams.get('ssl') === 'true' || parsed.searchParams.get('ssl-mode') || process.env.DB_SSL === 'true') {
-          ssl = { rejectUnauthorized: false };
-        }
       } catch (err) {
         console.warn('[DB] Failed to parse DATABASE_URL, using individual parameters:', err.message);
       }
@@ -68,7 +96,7 @@ class DatabaseService {
         await connection.query(`CREATE DATABASE IF NOT EXISTS \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
         await connection.end();
       } catch (dbCreateErr) {
-        // Some managed databases (e.g. Railway, PlanetScale, AWS RDS restricted users) disallow CREATE DATABASE
+        // Some managed databases (e.g. TiDB, Aiven, Railway, AWS RDS restricted users) disallow CREATE DATABASE
         // This is safe to ignore if the database already exists
       }
 
@@ -90,17 +118,20 @@ class DatabaseService {
       const [rows] = await this.pool.query('SELECT 1 as test');
       if (rows && rows.length > 0) {
         this.mode = 'mysql';
-        console.log(`[DB] Successfully connected to MySQL at ${host}:${port}/${database}`);
+        console.log(`[DB] Successfully connected to MySQL at ${host}:${port}/${database} (SSL: ${ssl ? 'enabled' : 'disabled'})`);
       }
     } catch (err) {
-      if (process.env.NODE_ENV === 'production' && process.env.ENABLE_LOCAL_JSON_FALLBACK !== 'true') {
-        console.error(`[DB CRITICAL] Production database connection failed to ${host}:${port}/${database}:`, err.message);
-        throw new Error(`Production database connection failed (${err.code || err.message}). Check DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, or DATABASE_URL.`);
+      const fallbackExplicitlyDisabled = process.env.ENABLE_LOCAL_JSON_FALLBACK === 'false' || process.env.ENABLE_LOCAL_JSON_FALLBACK === '0';
+      const isProduction = process.env.NODE_ENV === 'production';
+
+      if (fallbackExplicitlyDisabled || (isProduction && process.env.ENABLE_LOCAL_JSON_FALLBACK !== 'true')) {
+        console.error(`[DB CRITICAL] MySQL connection failed to ${host}:${port}/${database}:`, err.message);
+        throw new Error(`[DB CRITICAL] Database connection failed (${err.code || err.message}). ENABLE_LOCAL_JSON_FALLBACK is false. Server refusing to start without real database connection.`);
       }
 
       this.mode = 'local';
       console.log(`[DB] Notice: MySQL server not connected (${err.code || err.message}).`);
-      console.log(`[DB] Seamlessly using persistent local relational store (backend/data/fitbite_store.json). Zero configuration needed for local dev!`);
+      console.log(`[DB] Using local JSON storage fallback (ENABLE_LOCAL_JSON_FALLBACK=true).`);
     }
 
     await this.seedIfEmpty();
