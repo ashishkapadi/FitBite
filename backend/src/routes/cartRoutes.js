@@ -115,14 +115,8 @@ router.post(['/add', '/items'], requireAuth, async (req, res) => {
             message: `Your cart contains items from "${currentSeller?.business_name || 'another kitchen'}". Would you like to clear your cart and start a new order from "${targetSeller?.business_name || 'this kitchen'}"?`
           });
         }
-
-        // If user confirmed replacement, clear previous cart items
-        await db.delete('cart_items', { cart_id: cart.id });
       }
     }
-
-    // Set cart seller
-    await db.update('carts', { id: cart.id }, { seller_id: meal.seller_id });
 
     // Calculate exact price with customizations server-side
     const customResult = await calculateCustomMeal(meal.id, {
@@ -135,55 +129,81 @@ router.post(['/add', '/items'], requireAuth, async (req, res) => {
     const qty = Math.max(1, parseInt(quantity, 10));
     const totalPrice = Math.round(itemPrice * qty * 100) / 100;
 
-    // Check if identical item already exists in cart to prevent duplicate entries from repeated clicks
-    const existingItems = await db.find('cart_items', { cart_id: cart.id, meal_id: meal.id });
-    const matchingItem = existingItems.find(i => {
-      const matchPortion = (i.portion_selected || 'standard') === portion;
-      const matchNotes = (i.special_notes || '') === (special_notes ? special_notes.trim() : '');
-      const matchCustom = JSON.stringify(i.customizations?.selections || {}) === JSON.stringify(customizations || {});
-      return matchPortion && matchNotes && matchCustom;
+    // Set cart seller and item writes inside a transaction for complete rollback protection
+    const txResult = await db.withTransaction(async (trx) => {
+      // If user confirmed replacement of conflicting kitchen, clear previous cart items
+      if (cart.seller_id && cart.seller_id !== meal.seller_id && replace_cart_if_conflict) {
+        await trx.delete('cart_items', { cart_id: cart.id });
+      }
+
+      // Set cart seller
+      await trx.update('carts', { id: cart.id }, { seller_id: meal.seller_id });
+
+      // Check if identical item already exists in cart to prevent duplicate entries from repeated clicks
+      const existingItems = await trx.find('cart_items', { cart_id: cart.id, meal_id: meal.id });
+      const matchingItem = existingItems.find(i => {
+        const matchPortion = (i.portion_selected || 'standard') === portion;
+        const matchNotes = (i.special_notes || '') === (special_notes ? special_notes.trim() : '');
+        const matchCustom = JSON.stringify(i.customizations?.selections || {}) === JSON.stringify(customizations || {});
+        return matchPortion && matchNotes && matchCustom;
+      });
+
+      if (matchingItem) {
+        const updatedQty = matchingItem.quantity + qty;
+        const updatedTotal = Math.round(matchingItem.item_price * updatedQty * 100) / 100;
+        await trx.update('cart_items', { id: matchingItem.id }, {
+          quantity: updatedQty,
+          total_price: updatedTotal
+        });
+        const updated = await trx.findOne('cart_items', { id: matchingItem.id });
+        return {
+          statusCode: 200,
+          message: `Updated "${meal.name}" quantity to ${updatedQty}!`,
+          cart_item: updated
+        };
+      }
+
+      const shortItemId = `ci_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+      const newItem = await trx.insert('cart_items', {
+        id: shortItemId,
+        cart_id: cart.id,
+        meal_id: meal.id,
+        quantity: qty,
+        portion_selected: portion,
+        customizations: {
+          selections: customizations,
+          applied_options: customResult.applied_options,
+          removals: customResult.removals,
+          estimated_calories: customResult.estimated_calories,
+          estimated_protein: customResult.estimated_protein
+        },
+        item_price: parseFloat(itemPrice),
+        total_price: parseFloat(totalPrice),
+        special_notes: special_notes ? special_notes.trim() : null
+      });
+
+      return {
+        statusCode: 201,
+        message: `Added "${meal.name}" to cart!`,
+        cart_item: newItem
+      };
     });
 
-    if (matchingItem) {
-      const updatedQty = matchingItem.quantity + qty;
-      const updatedTotal = Math.round(matchingItem.item_price * updatedQty * 100) / 100;
-      await db.update('cart_items', { id: matchingItem.id }, {
-        quantity: updatedQty,
-        total_price: updatedTotal
-      });
-      const updated = await db.findOne('cart_items', { id: matchingItem.id });
-      return res.status(200).json({
-        message: `Updated "${meal.name}" quantity to ${updatedQty}!`,
-        cart_item: updated
-      });
-    }
-
-    const shortItemId = `ci_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
-    const newItem = await db.insert('cart_items', {
-      id: shortItemId,
-      cart_id: cart.id,
-      meal_id: meal.id,
-      quantity: qty,
-      portion_selected: portion,
-      customizations: {
-        selections: customizations,
-        applied_options: customResult.applied_options,
-        removals: customResult.removals,
-        estimated_calories: customResult.estimated_calories,
-        estimated_protein: customResult.estimated_protein
-      },
-      item_price: parseFloat(itemPrice),
-      total_price: parseFloat(totalPrice),
-      special_notes: special_notes ? special_notes.trim() : null
-    });
-
-    res.status(201).json({
-      message: `Added "${meal.name}" to cart!`,
-      cart_item: newItem
+    res.status(txResult.statusCode).json({
+      message: txResult.message,
+      cart_item: txResult.cart_item
     });
   } catch (err) {
-    console.error('Add to cart error:', err);
-    res.status(500).json({ error: err.message || 'Server error adding item to cart.' });
+    console.error('[Cart Error] Add to cart failed:', {
+      error: err.message,
+      code: err.code,
+      sqlState: err.sqlState,
+      userId: req.user?.id,
+      mealId: req.body?.meal_id
+    });
+    res.status(500).json({
+      error: 'Unable to add item to your cart right now. Please try again.'
+    });
   }
 });
 
@@ -200,25 +220,35 @@ router.put('/items/:id', requireAuth, async (req, res) => {
     }
 
     const newQty = parseInt(quantity, 10);
-    if (newQty <= 0) {
-      await db.delete('cart_items', { id: item.id });
-      // If cart empty, reset seller_id
-      const remaining = await db.find('cart_items', { cart_id: cart.id });
-      if (remaining.length === 0) {
-        await db.update('carts', { id: cart.id }, { seller_id: null });
+    const result = await db.withTransaction(async (trx) => {
+      if (newQty <= 0) {
+        await trx.delete('cart_items', { id: item.id });
+        const remaining = await trx.find('cart_items', { cart_id: cart.id });
+        if (remaining.length === 0) {
+          await trx.update('carts', { id: cart.id }, { seller_id: null });
+        }
+        return { deleted: true };
       }
-      return res.json({ message: 'Item removed from cart.' });
-    }
 
-    const updatedTotal = Math.round(item.item_price * newQty * 100) / 100;
-    await db.update('cart_items', { id: item.id }, {
-      quantity: newQty,
-      total_price: updatedTotal
+      const updatedTotal = Math.round(item.item_price * newQty * 100) / 100;
+      await trx.update('cart_items', { id: item.id }, {
+        quantity: newQty,
+        total_price: updatedTotal
+      });
+      const updated = await trx.findOne('cart_items', { id: item.id });
+      return { updated };
     });
 
-    res.json({ message: 'Cart updated successfully.' });
+    if (result.deleted) {
+      return res.json({ message: 'Item removed from cart.' });
+    }
+    res.json({ message: 'Cart updated successfully.', cart_item: result.updated });
   } catch (err) {
-    console.error('Update cart item error:', err);
+    console.error('[Cart Error] Update cart item failed:', {
+      error: err.message,
+      code: err.code,
+      itemId: req.params?.id
+    });
     res.status(500).json({ error: 'Server error updating cart item.' });
   }
 });
@@ -229,17 +259,21 @@ router.delete('/items/:id', requireAuth, async (req, res) => {
     const user = req.user;
     const cart = await getOrCreateCart(user.id);
 
-    await db.delete('cart_items', { id: req.params.id, cart_id: cart.id });
-
-    // If cart is now empty, clear seller_id
-    const remaining = await db.find('cart_items', { cart_id: cart.id });
-    if (remaining.length === 0) {
-      await db.update('carts', { id: cart.id }, { seller_id: null });
-    }
+    await db.withTransaction(async (trx) => {
+      await trx.delete('cart_items', { id: req.params.id, cart_id: cart.id });
+      const remaining = await trx.find('cart_items', { cart_id: cart.id });
+      if (remaining.length === 0) {
+        await trx.update('carts', { id: cart.id }, { seller_id: null });
+      }
+    });
 
     res.json({ message: 'Item removed from cart.' });
   } catch (err) {
-    console.error('Delete cart item error:', err);
+    console.error('[Cart Error] Delete cart item failed:', {
+      error: err.message,
+      code: err.code,
+      itemId: req.params?.id
+    });
     res.status(500).json({ error: 'Server error deleting cart item.' });
   }
 });
@@ -250,12 +284,18 @@ router.delete(['/', '/clear'], requireAuth, async (req, res) => {
     const user = req.user;
     const cart = await getOrCreateCart(user.id);
 
-    await db.delete('cart_items', { cart_id: cart.id });
-    await db.update('carts', { id: cart.id }, { seller_id: null });
+    await db.withTransaction(async (trx) => {
+      await trx.delete('cart_items', { cart_id: cart.id });
+      await trx.update('carts', { id: cart.id }, { seller_id: null });
+    });
 
     res.json({ message: 'Cart cleared successfully.' });
   } catch (err) {
-    console.error('Clear cart error:', err);
+    console.error('[Cart Error] Clear cart failed:', {
+      error: err.message,
+      code: err.code,
+      userId: user.id
+    });
     res.status(500).json({ error: 'Server error clearing cart.' });
   }
 });

@@ -85,7 +85,98 @@ describe('FitBite Regression & Bug Fix Verification Suite', () => {
     });
   });
 
-  describe('3. Build Your Own Meal Calculation', () => {
+  describe('3. Timestamp Handling & UTC SQL Datetime Serialization', () => {
+    test('formatUtcDatetime formats ISO strings and Date objects to SQL YYYY-MM-DD HH:MM:SS without T and Z', async () => {
+      const { formatUtcDatetime, formatUtcDateOnly, serializeColumnValue } = await import('../src/db/db.js');
+
+      const isoInput = '2026-10-09T15:56:19.243Z';
+      const formatted = formatUtcDatetime(isoInput, 0);
+      assert.strictEqual(formatted, '2026-10-09 15:56:19', 'Must remove T and Z and match SQL TIMESTAMP format');
+
+      const dateObj = new Date('2026-10-09T15:56:19.243Z');
+      const formattedFromDate = formatUtcDatetime(dateObj, 0);
+      assert.strictEqual(formattedFromDate, '2026-10-09 15:56:19');
+
+      // Date only
+      const dateOnly = formatUtcDateOnly('2026-11-01T00:00:00.000Z');
+      assert.strictEqual(dateOnly, '2026-11-01');
+    });
+
+    test('serializeColumnValue safely distinguishes timestamps, dates, JSON, and text fields', async () => {
+      const { serializeColumnValue } = await import('../src/db/db.js');
+
+      // 1. Timestamp column with ISO string input (The exact production error trigger)
+      const serializedCreatedAt = serializeColumnValue('cart_items', 'created_at', '2026-10-09T15:56:19.243Z');
+      assert.strictEqual(serializedCreatedAt, '2026-10-09 15:56:19');
+
+      // 2. Date column with ISO string input
+      const serializedStartDate = serializeColumnValue('subscriptions', 'start_date', '2026-11-01T00:00:00.000Z');
+      assert.strictEqual(serializedStartDate, '2026-11-01');
+
+      // 3. JSON column with structured object
+      const jsonField = serializeColumnValue('cart_items', 'customizations', { spice: 'medium', extra_protein: true });
+      assert.strictEqual(jsonField, JSON.stringify({ spice: 'medium', extra_protein: true }));
+
+      // 4. Text column
+      const textNotes = serializeColumnValue('cart_items', 'special_notes', 'Please do not ring bell');
+      assert.strictEqual(textNotes, 'Please do not ring bell');
+
+      // 5. Null preservation
+      assert.strictEqual(serializeColumnValue('cart_items', 'special_notes', null), null);
+    });
+
+    test('db.withTransaction rolls back all partial writes on failure and preserves previous cart', async () => {
+      const testCartId = `c_tx_${Date.now().toString(36)}`;
+      await db.insert('carts', {
+        id: testCartId,
+        user_id: 'user_cust_tx_test',
+        seller_id: 'seller_orig'
+      });
+
+      const initialItem = await db.insert('cart_items', {
+        id: `ci_tx_orig_${Date.now().toString(36)}`,
+        cart_id: testCartId,
+        meal_id: 'meal_001',
+        quantity: 1,
+        portion_selected: 'standard',
+        customizations: {},
+        item_price: 150.00,
+        total_price: 150.00,
+        special_notes: null
+      });
+
+      // Verify transaction rolls back if an error occurs mid-operation
+      let caughtError = false;
+      try {
+        await db.withTransaction(async (trx) => {
+          // 1. Delete original items
+          await trx.delete('cart_items', { cart_id: testCartId });
+          // 2. Update cart seller
+          await trx.update('carts', { id: testCartId }, { seller_id: 'seller_new' });
+          // 3. Deliberately throw an error
+          throw new Error('Simulated mid-write error');
+        });
+      } catch (err) {
+        caughtError = true;
+      }
+
+      assert.ok(caughtError, 'Transaction must throw on failure');
+
+      // Verify original cart state was restored
+      const cartAfterRollback = await db.findOne('carts', { id: testCartId });
+      assert.strictEqual(cartAfterRollback.seller_id, 'seller_orig', 'Cart seller must remain unchanged after rollback');
+
+      const itemsAfterRollback = await db.find('cart_items', { cart_id: testCartId });
+      assert.strictEqual(itemsAfterRollback.length, 1, 'Original cart item must be preserved after rollback');
+      assert.strictEqual(itemsAfterRollback[0].id, initialItem.id);
+
+      // Cleanup
+      await db.delete('cart_items', { cart_id: testCartId });
+      await db.delete('carts', { id: testCartId });
+    });
+  });
+
+  describe('4. Build Your Own Meal Calculation', () => {
     test('calculateCustomMeal accepts valid selections and calculates pricing and nutrition', async () => {
       const meal = await db.findOne('meals', { id: 'meal_001' });
       assert.ok(meal, 'Meal meal_001 must exist');
@@ -101,7 +192,7 @@ describe('FitBite Regression & Bug Fix Verification Suite', () => {
     });
   });
 
-  describe('4. Seller Security & Isolation', () => {
+  describe('5. Seller Security & Isolation', () => {
     test('Pending sellers are excluded from public catalog search', async () => {
       const pendingSeller = await db.findOne('seller_profiles', { verification_status: 'pending_approval' });
       if (pendingSeller) {

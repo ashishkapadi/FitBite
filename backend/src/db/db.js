@@ -70,6 +70,139 @@ export function validateSeedGraph() {
   }
 }
 
+export const STATIC_SCHEMA_METADATA = {
+  users: {
+    id: { dataType: 'varchar' },
+    email: { dataType: 'varchar' },
+    password_hash: { dataType: 'varchar' },
+    role: { dataType: 'varchar' },
+    full_name: { dataType: 'varchar' },
+    phone: { dataType: 'varchar' },
+    is_active: { dataType: 'boolean' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  customer_profiles: {
+    id: { dataType: 'varchar' },
+    user_id: { dataType: 'varchar' },
+    onboarding_completed: { dataType: 'boolean' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  customer_preferences: {
+    allergies: { dataType: 'json' },
+    avoid_ingredients: { dataType: 'json' },
+    preferred_cuisines: { dataType: 'json' },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  addresses: {
+    id: { dataType: 'varchar' },
+    user_id: { dataType: 'varchar' },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  seller_profiles: {
+    id: { dataType: 'varchar' },
+    user_id: { dataType: 'varchar' },
+    pincodes_served: { dataType: 'json' },
+    cuisine_specializations: { dataType: 'json' },
+    fssai_expiry_date: { dataType: 'date' },
+    is_listed: { dataType: 'boolean' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  seller_verification_documents: {
+    uploaded_at: { dataType: 'timestamp', precision: 0 }
+  },
+  categories: {
+    id: { dataType: 'varchar' },
+    name: { dataType: 'varchar' },
+    slug: { dataType: 'varchar' }
+  },
+  meals: {
+    portion_choices: { dataType: 'json' },
+    ingredients: { dataType: 'json' },
+    allergens: { dataType: 'json' },
+    dietary_tags: { dataType: 'json' },
+    is_available: { dataType: 'boolean' },
+    is_featured: { dataType: 'boolean' },
+    is_tiffin_eligible: { dataType: 'boolean' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  customization_options: {},
+  meal_customization_mappings: {},
+  carts: {
+    id: { dataType: 'varchar' },
+    user_id: { dataType: 'varchar' },
+    seller_id: { dataType: 'varchar' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  cart_items: {
+    id: { dataType: 'varchar' },
+    cart_id: { dataType: 'varchar' },
+    meal_id: { dataType: 'varchar' },
+    customizations: { dataType: 'json' },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  coupons: {
+    valid_from: { dataType: 'datetime', precision: 0 },
+    valid_until: { dataType: 'datetime', precision: 0 },
+    is_active: { dataType: 'boolean' },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  orders: {
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  order_items: {
+    customizations: { dataType: 'json' }
+  },
+  payments: {
+    raw_gateway_response: { dataType: 'json' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  refunds: {
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  subscriptions: {
+    delivery_days: { dataType: 'json' },
+    dietary_preferences: { dataType: 'json' },
+    start_date: { dataType: 'date' },
+    original_end_date: { dataType: 'date' },
+    revised_end_date: { dataType: 'date' },
+    cancelled_at: { dataType: 'datetime', precision: 0 },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  daily_tiffin_menus: {
+    meal_ids: { dataType: 'json' },
+    menu_date: { dataType: 'date' },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  scheduled_deliveries: {
+    delivery_date: { dataType: 'date' },
+    created_at: { dataType: 'timestamp', precision: 0 },
+    updated_at: { dataType: 'timestamp', precision: 0 }
+  },
+  saved_custom_meals: {
+    selections: { dataType: 'json' },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  delivery_tracking_events: {
+    event_timestamp: { dataType: 'datetime', precision: 0 },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  reviews: {
+    created_at: { dataType: 'timestamp', precision: 0 }
+  },
+  audit_logs: {
+    metadata: { dataType: 'json' },
+    created_at: { dataType: 'timestamp', precision: 0 }
+  }
+};
+
 const TABLES_WITH_UPDATED_AT = new Set([
   'users',
   'customer_profiles',
@@ -103,12 +236,152 @@ const TABLES_WITH_CREATED_AT = new Set([
   'audit_logs'
 ]);
 
+/**
+ * Formats a Date or timestamp into a SQL-compliant UTC string (YYYY-MM-DD HH:MM:SS[.fractional]).
+ * Avoids ISO-8601 'T' and 'Z' characters which cause MySQL 1292 Incorrect datetime value.
+ */
+export function formatUtcDatetime(dateOrString, precision = 0) {
+  if (!dateOrString) return null;
+  const d = dateOrString instanceof Date ? dateOrString : new Date(dateOrString);
+  if (isNaN(d.getTime())) return dateOrString;
+
+  const pad = n => String(n).padStart(2, '0');
+  const YYYY = d.getUTCFullYear();
+  const MM = pad(d.getUTCMonth() + 1);
+  const DD = pad(d.getUTCDate());
+  const HH = pad(d.getUTCHours());
+  const mm = pad(d.getUTCMinutes());
+  const ss = pad(d.getUTCSeconds());
+  let res = `${YYYY}-${MM}-${DD} ${HH}:${mm}:${ss}`;
+  if (precision > 0) {
+    const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
+    res += `.${ms.padEnd(precision, '0').slice(0, precision)}`;
+  }
+  return res;
+}
+
+/**
+ * Formats a Date into a SQL-compliant date-only string (YYYY-MM-DD).
+ */
+export function formatUtcDateOnly(dateOrString) {
+  if (!dateOrString) return null;
+  if (typeof dateOrString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateOrString)) {
+    return dateOrString;
+  }
+  const d = dateOrString instanceof Date ? dateOrString : new Date(dateOrString);
+  if (isNaN(d.getTime())) return dateOrString;
+
+  const pad = n => String(n).padStart(2, '0');
+  const YYYY = d.getUTCFullYear();
+  const MM = pad(d.getUTCMonth() + 1);
+  const DD = pad(d.getUTCDate());
+  return `${YYYY}-${MM}-${DD}`;
+}
+
+/**
+ * Schema-aware serializer for column values.
+ * Handles UTC datetime conversions, DATE-only formatting, JSON serialization, and primitive preservation.
+ */
+export function serializeColumnValue(table, col, val, colMeta = null) {
+  if (val === null || val === undefined) {
+    return null;
+  }
+
+  const meta = colMeta || STATIC_SCHEMA_METADATA[table]?.[col];
+  const dataType = meta?.dataType?.toLowerCase();
+  const precision = meta?.precision ?? 0;
+
+  // 1. TIMESTAMP or DATETIME columns
+  if (
+    dataType === 'timestamp' ||
+    dataType === 'datetime' ||
+    col === 'created_at' ||
+    col === 'updated_at' ||
+    col.endsWith('_at') ||
+    col.endsWith('_timestamp')
+  ) {
+    return formatUtcDatetime(val, precision);
+  }
+
+  // 2. DATE columns
+  if (dataType === 'date' || col.endsWith('_date') || col === 'date') {
+    return formatUtcDateOnly(val);
+  }
+
+  // 3. JSON columns or structured object values (excluding Date instances)
+  if (dataType === 'json' || (typeof val === 'object' && !(val instanceof Date))) {
+    return typeof val === 'object' ? JSON.stringify(val) : val;
+  }
+
+  // 4. Boolean values for MySQL TINYINT columns
+  if (typeof val === 'boolean' && (dataType === 'tinyint' || dataType === 'boolean')) {
+    return val ? 1 : 0;
+  }
+
+  // 5. Preserved primitives (strings, numbers, etc.)
+  return val;
+}
+
+/**
+ * Scoped database client passed into withTransaction() callback.
+ * Routes all queries through a dedicated, transaction-bound MySQL connection.
+ */
+class ScopedDatabaseService {
+  constructor(parent, connection) {
+    this.parent = parent;
+    this.connection = connection;
+    this.mode = 'mysql';
+  }
+
+  async find(table, filter = () => true) {
+    const [rows] = await this.connection.query(`SELECT * FROM \`${table}\``);
+    if (typeof filter === 'function') {
+      return rows.filter(filter);
+    }
+    if (typeof filter === 'object' && filter !== null) {
+      return rows.filter(row => {
+        return Object.entries(filter).every(([k, v]) => {
+          const rowVal = row[k];
+          if (typeof v === 'boolean') return Boolean(rowVal) === v;
+          if (typeof v === 'number' && typeof rowVal === 'string') return Number(rowVal) === v;
+          if (typeof v === 'string' && typeof rowVal === 'number') return String(rowVal) === v;
+          return rowVal === v;
+        });
+      });
+    }
+    return rows;
+  }
+
+  async findOne(table, filter = () => true) {
+    const list = await this.find(table, filter);
+    return list.length > 0 ? list[0] : null;
+  }
+
+  async insert(table, data) {
+    return this.parent.insert(table, data, this.connection);
+  }
+
+  async update(table, filter, updates) {
+    return this.parent.update(table, filter, updates, this.connection);
+  }
+
+  async delete(table, filter) {
+    return this.parent.delete(table, filter, this.connection);
+  }
+
+  async count(table, filter = () => true) {
+    const list = await this.find(table, filter);
+    return list.length;
+  }
+}
+
 class DatabaseService {
   constructor() {
     this.mode = 'local'; // 'mysql' or 'local'
     this.pool = null;
     this.isInitialized = false;
     this.schemaColumns = new Map();
+    this.schemaColumnMetadata = new Map();
   }
 
   async init() {
@@ -132,6 +405,7 @@ class DatabaseService {
         password: config.password,
         database: config.database,
         ssl: config.ssl,
+        timezone: 'Z', // Treat JavaScript dates explicitly as UTC
         waitForConnections: true,
         connectionLimit: parseInt(process.env.DB_POOL_LIMIT || '10', 10),
         queueLimit: 0,
@@ -139,30 +413,37 @@ class DatabaseService {
         keepAliveInitialDelay: 10000
       });
 
-      // 1. Verify basic connection
+      // 1. Verify basic connection and set session timezone to UTC
       const [rows] = await this.pool.query('SELECT 1 as test');
       if (!rows || rows.length === 0) {
         throw new Error('MySQL connectivity test query returned empty result.');
       }
+      await this.pool.query("SET time_zone = '+00:00'");
 
       this.mode = 'mysql';
-      console.log(`[DB] MySQL connection established successfully.`);
+      console.log(`[DB] MySQL connection established successfully with UTC session timezone.`);
 
       // 2. Run schema migrations in dependency order
       console.log(`[DB] Running database migrations on '${config.database}'...`);
       await runMigrations(this.pool);
 
-      // 3. Introspect schema column names to ensure type-safe, column-safe inserts and updates
+      // 3. Introspect schema column names and types for type-safe, column-safe writes
       try {
         const [colRows] = await this.pool.query(
-          "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+          "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATETIME_PRECISION FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
         );
         this.schemaColumns = new Map();
+        this.schemaColumnMetadata = new Map();
         for (const r of colRows) {
           if (!this.schemaColumns.has(r.TABLE_NAME)) {
             this.schemaColumns.set(r.TABLE_NAME, new Set());
+            this.schemaColumnMetadata.set(r.TABLE_NAME, new Map());
           }
           this.schemaColumns.get(r.TABLE_NAME).add(r.COLUMN_NAME);
+          this.schemaColumnMetadata.get(r.TABLE_NAME).set(r.COLUMN_NAME, {
+            dataType: (r.DATA_TYPE || '').toLowerCase(),
+            precision: r.DATETIME_PRECISION !== null ? parseInt(r.DATETIME_PRECISION, 10) : 0
+          });
         }
       } catch (colErr) {
         console.warn('[DB] Notice: Could not inspect INFORMATION_SCHEMA.COLUMNS, using static whitelist.');
@@ -191,6 +472,62 @@ class DatabaseService {
 
   getMode() {
     return this.mode;
+  }
+
+  getColumnMeta(table, col) {
+    const fromSchema = this.schemaColumnMetadata?.get(table)?.get(col);
+    if (fromSchema) return fromSchema;
+    return STATIC_SCHEMA_METADATA[table]?.[col] || null;
+  }
+
+  hasColumn(table, col) {
+    if (this.schemaColumns?.has(table)) {
+      return this.schemaColumns.get(table).has(col);
+    }
+    if (STATIC_SCHEMA_METADATA[table]?.[col] !== undefined) {
+      return true;
+    }
+    if (col === 'created_at') return TABLES_WITH_CREATED_AT.has(table);
+    if (col === 'updated_at') return TABLES_WITH_UPDATED_AT.has(table);
+    return true;
+  }
+
+  getColumnPrecision(table, col) {
+    const meta = this.getColumnMeta(table, col);
+    return meta?.precision ?? 0;
+  }
+
+  /**
+   * Executes workFn inside a transaction.
+   * On error, all changes within workFn are automatically rolled back.
+   */
+  async withTransaction(workFn) {
+    if (this.mode === 'mysql') {
+      const connection = await this.pool.getConnection();
+      try {
+        await connection.beginTransaction();
+        const scoped = new ScopedDatabaseService(this, connection);
+        const result = await workFn(scoped);
+        await connection.commit();
+        return result;
+      } catch (err) {
+        await connection.rollback();
+        throw err;
+      } finally {
+        connection.release();
+      }
+    }
+
+    // Local in-memory transaction: snapshot data and restore on error
+    const snapshot = JSON.parse(JSON.stringify(localStore.data));
+    try {
+      const result = await workFn(this);
+      return result;
+    } catch (err) {
+      localStore.data = snapshot;
+      localStore.save();
+      throw err;
+    }
   }
 
   async find(table, filter = () => true) {
@@ -238,42 +575,45 @@ class DatabaseService {
     return list.length > 0 ? list[0] : null;
   }
 
-  async insert(table, data) {
+  async insert(table, data, conn = null) {
     const row = { ...data };
-    const hasCreatedAt = this.schemaColumns?.get(table)?.has('created_at') ?? TABLES_WITH_CREATED_AT.has(table);
-    const hasUpdatedAt = this.schemaColumns?.get(table)?.has('updated_at') ?? TABLES_WITH_UPDATED_AT.has(table);
+    const hasCreatedAt = this.hasColumn(table, 'created_at');
+    const hasUpdatedAt = this.hasColumn(table, 'updated_at');
 
-    if (hasCreatedAt && !row.created_at) {
-      row.created_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    if (hasCreatedAt && row.created_at === undefined) {
+      row.created_at = formatUtcDatetime(new Date(), this.getColumnPrecision(table, 'created_at'));
+    } else if (hasCreatedAt && row.created_at !== undefined) {
+      row.created_at = serializeColumnValue(table, 'created_at', row.created_at, this.getColumnMeta(table, 'created_at'));
     }
-    if (hasUpdatedAt && !row.updated_at) {
-      row.updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    if (hasUpdatedAt && row.updated_at === undefined) {
+      row.updated_at = formatUtcDatetime(new Date(), this.getColumnPrecision(table, 'updated_at'));
+    } else if (hasUpdatedAt && row.updated_at !== undefined) {
+      row.updated_at = serializeColumnValue(table, 'updated_at', row.updated_at, this.getColumnMeta(table, 'updated_at'));
     }
 
     if (this.mode === 'mysql') {
+      const runner = conn || this.pool;
       const tableCols = this.schemaColumns?.get(table);
       const validKeys = tableCols ? Object.keys(row).filter(k => tableCols.has(k)) : Object.keys(row);
       const placeholders = validKeys.map(() => '?').join(', ');
       const values = validKeys.map(k => {
-        const val = row[k];
-        if (typeof val === 'object' && val !== null) {
-          return JSON.stringify(val);
-        }
-        return val;
+        return serializeColumnValue(table, k, row[k], this.getColumnMeta(table, k));
       });
       const updateClause = validKeys.map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
       const sql = `INSERT INTO \`${table}\` (${validKeys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
-      await this.pool.query(sql, values);
+      await runner.query(sql, values);
       return row;
     }
 
     return localStore.insert(table, row);
   }
 
-  async update(table, filter, updates) {
+  async update(table, filter, updates, conn = null) {
     if (this.mode === 'mysql') {
-      const existing = await this.find(table, filter);
-      const hasUpdatedAt = this.schemaColumns?.get(table)?.has('updated_at') ?? TABLES_WITH_UPDATED_AT.has(table);
+      const runner = conn || this.pool;
+      const existing = await (conn ? new ScopedDatabaseService(this, conn).find(table, filter) : this.find(table, filter));
+      const hasUpdatedAt = this.hasColumn(table, 'updated_at');
       const tableCols = this.schemaColumns?.get(table);
 
       for (const item of existing) {
@@ -284,17 +624,17 @@ class DatabaseService {
         if (updateKeys.length === 0) continue;
 
         let setClause = updateKeys.map(k => `\`${k}\` = ?`).join(', ');
-        if (hasUpdatedAt) {
-          setClause += ', `updated_at` = NOW()';
+        const values = updateKeys.map(k => {
+          return serializeColumnValue(table, k, updates[k], this.getColumnMeta(table, k));
+        });
+
+        if (hasUpdatedAt && !updateKeys.includes('updated_at')) {
+          setClause += ', `updated_at` = ?';
+          values.push(formatUtcDatetime(new Date(), this.getColumnPrecision(table, 'updated_at')));
         }
 
-        const values = updateKeys.map(k => {
-          const val = updates[k];
-          if (typeof val === 'object' && val !== null) return JSON.stringify(val);
-          return val;
-        });
         values.push(item.id);
-        await this.pool.query(`UPDATE \`${table}\` SET ${setClause} WHERE id = ?`, values);
+        await runner.query(`UPDATE \`${table}\` SET ${setClause} WHERE id = ?`, values);
       }
       return existing.map(item => ({ ...item, ...updates }));
     }
@@ -306,11 +646,12 @@ class DatabaseService {
     );
   }
 
-  async delete(table, filter) {
+  async delete(table, filter, conn = null) {
     if (this.mode === 'mysql') {
-      const existing = await this.find(table, filter);
+      const runner = conn || this.pool;
+      const existing = await (conn ? new ScopedDatabaseService(this, conn).find(table, filter) : this.find(table, filter));
       for (const item of existing) {
-        await this.pool.query(`DELETE FROM \`${table}\` WHERE id = ?`, [item.id]);
+        await runner.query(`DELETE FROM \`${table}\` WHERE id = ?`, [item.id]);
       }
       return existing;
     }
@@ -325,6 +666,7 @@ class DatabaseService {
     const list = await this.find(table, filter);
     return list.length;
   }
+
 
   async seedIfEmpty() {
     console.log('[DB] Running resilient, parent-resolved seed state verification...');
