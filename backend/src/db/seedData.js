@@ -41,6 +41,60 @@ export const SEED_USERS = [
     is_active: true
   },
   {
+    id: 'user_sell_03',
+    email: 'seller.swad@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'Sunita Joshi',
+    phone: '+91 98765 43215',
+    is_active: true
+  },
+  {
+    id: 'user_sell_04',
+    email: 'seller.dakshin@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'M. Venkatakrishnan',
+    phone: '+91 98765 43216',
+    is_active: true
+  },
+  {
+    id: 'user_sell_05',
+    email: 'seller.fitfuel@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'Karan Mehra',
+    phone: '+91 98765 43217',
+    is_active: true
+  },
+  {
+    id: 'user_sell_06',
+    email: 'seller.greenharvest@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'Shantilal Shah',
+    phone: '+91 98765 43218',
+    is_active: true
+  },
+  {
+    id: 'user_sell_07',
+    email: 'seller.rasoi@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'Dinesh Agarwal',
+    phone: '+91 98765 43219',
+    is_active: true
+  },
+  {
+    id: 'user_sell_08',
+    email: 'seller.freshbite@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'Ananya Roy',
+    phone: '+91 98765 43220',
+    is_active: true
+  },
+  {
     id: 'user_admin_01',
     email: 'admin@fitbite.demo',
     password_hash: DEMO_HASH_ADMIN,

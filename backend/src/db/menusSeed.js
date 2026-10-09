@@ -16,9 +16,11 @@ export function generateDailyTiffinMenus(sellerIds, mealsList) {
       dateObj.setDate(today.getDate() + dayOffset);
       const dateStr = dateObj.toISOString().split('T')[0];
 
+      if (pool.length === 0) continue;
+
       // Lunch
-      const lunchMeal = pool[(dayOffset * 2) % pool.size || (dayOffset * 2) % pool.length];
-      const altLunchMeal = pool[(dayOffset * 2 + 1) % pool.length];
+      const lunchMeal = pool[(dayOffset * 2) % pool.length];
+      const altLunchMeal = pool[(dayOffset * 2 + 1) % pool.length] || lunchMeal;
 
       menus.push({
         id: `dtm_${sellerId}_${dateStr}_lunch`,
