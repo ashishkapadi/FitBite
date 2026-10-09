@@ -95,6 +95,15 @@ export const SEED_USERS = [
     is_active: true
   },
   {
+    id: 'user_sell_pending',
+    email: 'seller.pending@fitbite.demo',
+    password_hash: DEMO_HASH_USER,
+    role: 'seller',
+    full_name: 'Ramesh Patel',
+    phone: '+91 98765 43221',
+    is_active: true
+  },
+  {
     id: 'user_admin_01',
     email: 'admin@fitbite.demo',
     password_hash: DEMO_HASH_ADMIN,

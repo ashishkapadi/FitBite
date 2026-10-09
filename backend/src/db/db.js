@@ -17,7 +17,58 @@ import {
 import { SEED_MEALS } from './mealsSeed.js';
 import { generateDailyTiffinMenus } from './menusSeed.js';
 
-dotenv.config();
+export function validateSeedGraph() {
+  const userIds = new Set(SEED_USERS.map(u => u.id));
+  const userEmails = new Set(SEED_USERS.map(u => u.email.toLowerCase()));
+  const cpIds = new Set(SEED_CUSTOMER_PROFILES.map(cp => cp.id));
+  const sellerIds = new Set(SEED_SELLERS.map(s => s.id));
+  const catIds = new Set(SEED_CATEGORIES.map(c => c.id));
+
+  // 1. Verify Customer Profiles
+  for (const cp of SEED_CUSTOMER_PROFILES) {
+    if (!userIds.has(cp.user_id) && (!cp.user_email || !userEmails.has(cp.user_email.toLowerCase()))) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Customer profile '${cp.id}' references non-existent user '${cp.user_id}'.`);
+    }
+  }
+
+  // 2. Verify Customer Preferences
+  for (const pref of SEED_CUSTOMER_PREFERENCES) {
+    if (!cpIds.has(pref.customer_id)) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Customer preference '${pref.id}' references non-existent customer profile '${pref.customer_id}'.`);
+    }
+  }
+
+  // 3. Verify Addresses
+  for (const addr of SEED_ADDRESSES) {
+    if (!userIds.has(addr.user_id) && (!addr.user_email || !userEmails.has(addr.user_email.toLowerCase()))) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Address '${addr.id}' references non-existent user '${addr.user_id}'.`);
+    }
+  }
+
+  // 4. Verify Sellers
+  for (const s of SEED_SELLERS) {
+    if (!userIds.has(s.user_id) && (!s.user_email || !userEmails.has(s.user_email.toLowerCase()))) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Seller '${s.id}' (${s.business_name}) references non-existent user '${s.user_id}'.`);
+    }
+  }
+
+  // 5. Verify Meals
+  for (const m of SEED_MEALS) {
+    if (!sellerIds.has(m.seller_id)) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Meal '${m.id}' (${m.name}) references non-existent seller '${m.seller_id}'.`);
+    }
+    if (!catIds.has(m.category_id)) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Meal '${m.id}' (${m.name}) references non-existent category '${m.category_id}'.`);
+    }
+  }
+
+  // 6. Verify Subscription Plans
+  for (const sp of SEED_SUBSCRIPTION_PLANS) {
+    if (!sellerIds.has(sp.seller_id)) {
+      throw new Error(`[DB CRITICAL] Seed graph validation error: Subscription plan '${sp.id}' references non-existent seller '${sp.seller_id}'.`);
+    }
+  }
+}
 
 class DatabaseService {
   constructor() {
@@ -28,6 +79,9 @@ class DatabaseService {
 
   async init() {
     if (this.isInitialized) return;
+
+    // Validate in-memory fixture relationship graph upfront
+    validateSeedGraph();
 
     const config = getDbConfig();
     const fallbackExplicitlyDisabled = process.env.ENABLE_LOCAL_JSON_FALLBACK === 'false' || process.env.ENABLE_LOCAL_JSON_FALLBACK === '0';
@@ -190,32 +244,42 @@ class DatabaseService {
   async seedIfEmpty() {
     console.log('[DB] Running resilient, parent-resolved seed state verification...');
 
-    // 1. Users: Seed all users and resolve dynamic Map of fixtureId -> storedId (and email -> storedId)
-    const userIdMap = new Map(); // fixtureId -> storedId
-    const emailToUserIdMap = new Map(); // email -> storedId
+    // 1. Users: Seed/upsert all users and resolve dynamic Map of fixtureId -> storedId, email -> storedId
+    const userIdMap = new Map(); // fixtureId / storedId / email -> storedId
 
-    for (const u of SEED_USERS) {
-      if (this.mode === 'mysql') {
+    if (this.mode === 'mysql') {
+      for (const u of SEED_USERS) {
         const sql = `INSERT INTO \`users\` (id, email, password_hash, role, full_name, phone, is_active)
           VALUES (?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone), is_active = VALUES(is_active)`;
         await this.pool.query(sql, [u.id, u.email, u.password_hash, u.role, u.full_name, u.phone, u.is_active]);
+      }
 
-        const [rows] = await this.pool.query('SELECT id, email FROM `users` WHERE email = ?', [u.email]);
-        if (rows && rows.length > 0) {
-          const realId = rows[0].id;
-          userIdMap.set(u.id, realId);
-          emailToUserIdMap.set(u.email, realId);
+      // Query all users from MySQL to populate complete ID map
+      const [allUserRows] = await this.pool.query('SELECT id, email FROM `users`');
+      for (const row of allUserRows) {
+        userIdMap.set(row.id, row.id);
+        if (row.email) {
+          userIdMap.set(row.email.toLowerCase(), row.id);
         }
-      } else {
+      }
+      // Associate fixture IDs with actual stored IDs
+      for (const u of SEED_USERS) {
+        const storedId = userIdMap.get(u.email.toLowerCase()) || userIdMap.get(u.id);
+        if (storedId) {
+          userIdMap.set(u.id, storedId);
+        }
+      }
+    } else {
+      for (const u of SEED_USERS) {
         const existing = localStore.findOne('users', r => r.email === u.email || r.id === u.id);
         if (!existing) {
           localStore.insert('users', u);
           userIdMap.set(u.id, u.id);
-          emailToUserIdMap.set(u.email, u.id);
+          userIdMap.set(u.email.toLowerCase(), u.id);
         } else {
           userIdMap.set(u.id, existing.id);
-          emailToUserIdMap.set(u.email, existing.id);
+          userIdMap.set(u.email.toLowerCase(), existing.id);
         }
       }
     }
@@ -223,18 +287,30 @@ class DatabaseService {
     // 2. Customer Profiles
     const cpIdMap = new Map(); // fixtureCpId -> storedCpId
     for (const cp of SEED_CUSTOMER_PROFILES) {
-      const realUserId = userIdMap.get(cp.user_id) || cp.user_id;
-      if (!realUserId) continue;
+      const realUserId = userIdMap.get(cp.user_id) || userIdMap.get(cp.user_email?.toLowerCase()) || cp.user_id;
+      if (!realUserId) {
+        throw new Error(`[DB CRITICAL] Seed initialization error: Customer profile fixture '${cp.id}' user_id '${cp.user_id}' could not be resolved.`);
+      }
 
       if (this.mode === 'mysql') {
+        // Pre-write verification
+        const [uCheck] = await this.pool.query('SELECT id FROM `users` WHERE id = ?', [realUserId]);
+        if (!uCheck || uCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Customer profile fixture '${cp.id}' initialization error: Parent user_id '${realUserId}' (resolved from fixture '${cp.user_id}') does not exist in users table.`);
+        }
+
+        const [existingCp] = await this.pool.query('SELECT id FROM `customer_profiles` WHERE user_id = ?', [realUserId]);
+        const targetCpId = (existingCp && existingCp.length > 0) ? existingCp[0].id : cp.id;
+
         const sql = `INSERT INTO \`customer_profiles\` (id, user_id, living_situation, routine_type, primary_interest, default_delivery_slot, onboarding_completed)
           VALUES (?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE default_delivery_slot = VALUES(default_delivery_slot), onboarding_completed = VALUES(onboarding_completed)`;
-        await this.pool.query(sql, [cp.id, realUserId, cp.living_situation, cp.routine_type, cp.primary_interest, cp.default_delivery_slot, cp.onboarding_completed]);
+        await this.pool.query(sql, [targetCpId, realUserId, cp.living_situation, cp.routine_type, cp.primary_interest, cp.default_delivery_slot, cp.onboarding_completed]);
 
         const [rows] = await this.pool.query('SELECT id FROM `customer_profiles` WHERE user_id = ?', [realUserId]);
         if (rows && rows.length > 0) {
           cpIdMap.set(cp.id, rows[0].id);
+          cpIdMap.set(rows[0].id, rows[0].id);
         }
       } else {
         const existing = localStore.findOne('customer_profiles', r => r.user_id === realUserId);
@@ -251,14 +327,24 @@ class DatabaseService {
     // 3. Customer Preferences
     for (const pref of SEED_CUSTOMER_PREFERENCES) {
       const realCpId = cpIdMap.get(pref.customer_id) || pref.customer_id;
-      if (!realCpId) continue;
+      if (!realCpId) {
+        throw new Error(`[DB CRITICAL] Seed initialization error: Customer preference fixture '${pref.id}' customer_id '${pref.customer_id}' could not be resolved.`);
+      }
 
       if (this.mode === 'mysql') {
+        const [cpCheck] = await this.pool.query('SELECT id FROM `customer_profiles` WHERE id = ?', [realCpId]);
+        if (!cpCheck || cpCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Customer preferences fixture '${pref.id}' initialization error: customer_profile '${realCpId}' (resolved from fixture '${pref.customer_id}') does not exist in customer_profiles table.`);
+        }
+
+        const [existingPref] = await this.pool.query('SELECT id FROM `customer_preferences` WHERE customer_id = ?', [realCpId]);
+        const targetPrefId = (existingPref && existingPref.length > 0) ? existingPref[0].id : pref.id;
+
         const sql = `INSERT INTO \`customer_preferences\` (id, customer_id, goal, dietary_preference, allergies, avoid_ingredients, preferred_cuisines, spice_preference, budget_per_meal, preferred_portion, age, height_cm, weight_kg, activity_level, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE goal = VALUES(goal), dietary_preference = VALUES(dietary_preference)`;
+          ON DUPLICATE KEY UPDATE goal = VALUES(goal), dietary_preference = VALUES(dietary_preference), allergies = VALUES(allergies), avoid_ingredients = VALUES(avoid_ingredients), preferred_cuisines = VALUES(preferred_cuisines), spice_preference = VALUES(spice_preference), budget_per_meal = VALUES(budget_per_meal), preferred_portion = VALUES(preferred_portion), age = VALUES(age), height_cm = VALUES(height_cm), weight_kg = VALUES(weight_kg), activity_level = VALUES(activity_level), notes = VALUES(notes)`;
         await this.pool.query(sql, [
-          pref.id,
+          targetPrefId,
           realCpId,
           pref.goal,
           pref.dietary_preference,
@@ -285,15 +371,25 @@ class DatabaseService {
     // 4. Addresses
     const addrIdMap = new Map(); // fixtureAddrId -> storedAddrId
     for (const addr of SEED_ADDRESSES) {
-      const realUserId = userIdMap.get(addr.user_id) || addr.user_id;
-      if (!realUserId) continue;
+      const realUserId = userIdMap.get(addr.user_id) || userIdMap.get(addr.user_email?.toLowerCase()) || addr.user_id;
+      if (!realUserId) {
+        throw new Error(`[DB CRITICAL] Seed initialization error: Address fixture '${addr.id}' user_id '${addr.user_id}' could not be resolved.`);
+      }
 
       if (this.mode === 'mysql') {
+        const [uCheck] = await this.pool.query('SELECT id FROM `users` WHERE id = ?', [realUserId]);
+        if (!uCheck || uCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Address fixture '${addr.id}' initialization error: Parent user_id '${realUserId}' (resolved from fixture '${addr.user_id}') does not exist in users table.`);
+        }
+
+        const [existingAddr] = await this.pool.query('SELECT id FROM `addresses` WHERE user_id = ? AND label = ?', [realUserId, addr.label]);
+        const targetAddrId = (existingAddr && existingAddr.length > 0) ? existingAddr[0].id : addr.id;
+
         const sql = `INSERT INTO \`addresses\` (id, user_id, label, recipient_name, phone, street_address, landmark, area, city, pincode, is_default, leave_at_doorstep, exchange_steel_dabba, delivery_instructions)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE recipient_name = VALUES(recipient_name), phone = VALUES(phone)`;
+          ON DUPLICATE KEY UPDATE recipient_name = VALUES(recipient_name), phone = VALUES(phone), street_address = VALUES(street_address), landmark = VALUES(landmark), area = VALUES(area), city = VALUES(city), pincode = VALUES(pincode), is_default = VALUES(is_default), leave_at_doorstep = VALUES(leave_at_doorstep), exchange_steel_dabba = VALUES(exchange_steel_dabba), delivery_instructions = VALUES(delivery_instructions)`;
         await this.pool.query(sql, [
-          addr.id,
+          targetAddrId,
           realUserId,
           addr.label,
           addr.recipient_name,
@@ -312,8 +408,7 @@ class DatabaseService {
         const [rows] = await this.pool.query('SELECT id FROM `addresses` WHERE user_id = ? AND label = ?', [realUserId, addr.label]);
         if (rows && rows.length > 0) {
           addrIdMap.set(addr.id, rows[0].id);
-        } else {
-          addrIdMap.set(addr.id, addr.id);
+          addrIdMap.set(rows[0].id, rows[0].id);
         }
       } else {
         const existing = localStore.findOne('addresses', r => r.user_id === realUserId && r.label === addr.label);
@@ -330,18 +425,47 @@ class DatabaseService {
     // 5. Sellers
     const sellerIdMap = new Map(); // fixtureSellerId -> storedSellerId
     for (const s of SEED_SELLERS) {
-      const realUserId = userIdMap.get(s.user_id) || s.user_id;
+      const realUserId = userIdMap.get(s.user_id) || userIdMap.get(s.user_email?.toLowerCase()) || s.user_id;
       if (!realUserId) {
-        console.warn(`[DB Seed Warning] Skipping seller ${s.id} (${s.business_name}): user_id ${s.user_id} not resolved.`);
-        continue;
+        throw new Error(`[DB CRITICAL] Seed initialization error: Seller fixture '${s.id}' user_id '${s.user_id}' could not be resolved.`);
       }
 
       if (this.mode === 'mysql') {
+        // Step 2 & 4: Explicit Pre-Write Parent Verification
+        const [userCheck] = await this.pool.query('SELECT id FROM `users` WHERE id = ?', [realUserId]);
+        if (!userCheck || userCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Seller profile fixture '${s.id}' (${s.business_name}) initialization error: Parent user_id '${realUserId}' (resolved from fixture '${s.user_id}') does not exist in users table.`);
+        }
+
+        const [existingSeller] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE user_id = ?', [realUserId]);
+        const targetSellerId = (existingSeller && existingSeller.length > 0) ? existingSeller[0].id : s.id;
+
         const sql = `INSERT INTO \`seller_profiles\` (id, user_id, business_name, owner_name, kitchen_type, delivery_model, operating_address, area, city, pincodes_served, delivery_radius_km, cuisine_specializations, operating_hours, fssai_number, fssai_expiry_date, fssai_certificate_url, verification_status, rejection_reason, rating, rating_count, preparation_cutoff_lunch_time, preparation_cutoff_dinner_time, is_listed)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE business_name = VALUES(business_name), is_listed = VALUES(is_listed), verification_status = VALUES(verification_status)`;
+          ON DUPLICATE KEY UPDATE
+            business_name = VALUES(business_name),
+            owner_name = VALUES(owner_name),
+            kitchen_type = VALUES(kitchen_type),
+            delivery_model = VALUES(delivery_model),
+            operating_address = VALUES(operating_address),
+            area = VALUES(area),
+            city = VALUES(city),
+            pincodes_served = VALUES(pincodes_served),
+            delivery_radius_km = VALUES(delivery_radius_km),
+            cuisine_specializations = VALUES(cuisine_specializations),
+            operating_hours = VALUES(operating_hours),
+            fssai_number = VALUES(fssai_number),
+            fssai_expiry_date = VALUES(fssai_expiry_date),
+            fssai_certificate_url = VALUES(fssai_certificate_url),
+            verification_status = VALUES(verification_status),
+            rejection_reason = VALUES(rejection_reason),
+            rating = VALUES(rating),
+            rating_count = VALUES(rating_count),
+            preparation_cutoff_lunch_time = VALUES(preparation_cutoff_lunch_time),
+            preparation_cutoff_dinner_time = VALUES(preparation_cutoff_dinner_time),
+            is_listed = VALUES(is_listed)`;
         await this.pool.query(sql, [
-          s.id,
+          targetSellerId,
           realUserId,
           s.business_name,
           s.owner_name,
@@ -369,8 +493,8 @@ class DatabaseService {
         const [rows] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE user_id = ?', [realUserId]);
         if (rows && rows.length > 0) {
           sellerIdMap.set(s.id, rows[0].id);
-        } else {
-          sellerIdMap.set(s.id, s.id);
+          sellerIdMap.set(rows[0].id, rows[0].id);
+          sellerIdMap.set(s.business_name, rows[0].id);
         }
       } else {
         const existing = localStore.findOne('seller_profiles', r => r.user_id === realUserId);
@@ -378,34 +502,43 @@ class DatabaseService {
           const inserted = { ...s, user_id: realUserId };
           localStore.insert('seller_profiles', inserted);
           sellerIdMap.set(s.id, inserted.id);
+          sellerIdMap.set(inserted.id, inserted.id);
+          sellerIdMap.set(s.business_name, inserted.id);
         } else {
+          localStore.update('seller_profiles', r => r.id === existing.id, { ...s, user_id: realUserId });
           sellerIdMap.set(s.id, existing.id);
+          sellerIdMap.set(existing.id, existing.id);
+          sellerIdMap.set(s.business_name, existing.id);
         }
       }
     }
 
     // 6. Categories
-    const catIdMap = new Map(); // fixtureCatId -> storedCatId
+    const catIdMap = new Map(); // fixtureCatId / slug / name -> storedCatId
     for (const c of SEED_CATEGORIES) {
       if (this.mode === 'mysql') {
         const sql = `INSERT INTO \`categories\` (id, name, slug, description, icon_name, image_url, display_order)
           VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)`;
+          ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), icon_name = VALUES(icon_name), image_url = VALUES(image_url), display_order = VALUES(display_order)`;
         await this.pool.query(sql, [c.id, c.name, c.slug, c.description, c.icon_name, c.image_url, c.display_order]);
 
         const [rows] = await this.pool.query('SELECT id FROM `categories` WHERE slug = ?', [c.slug]);
         if (rows && rows.length > 0) {
           catIdMap.set(c.id, rows[0].id);
-        } else {
-          catIdMap.set(c.id, c.id);
+          catIdMap.set(c.slug, rows[0].id);
+          catIdMap.set(c.name, rows[0].id);
         }
       } else {
         const existing = localStore.findOne('categories', r => r.slug === c.slug || r.id === c.id);
         if (!existing) {
           localStore.insert('categories', c);
           catIdMap.set(c.id, c.id);
+          catIdMap.set(c.slug, c.id);
+          catIdMap.set(c.name, c.id);
         } else {
           catIdMap.set(c.id, existing.id);
+          catIdMap.set(c.slug, existing.id);
+          catIdMap.set(c.name, existing.id);
         }
       }
     }
@@ -416,7 +549,7 @@ class DatabaseService {
       if (this.mode === 'mysql') {
         const sql = `INSERT INTO \`customization_options\` (id, name, group_type, item_choice, price_delta, calorie_delta, protein_delta, carbs_delta, fat_delta, is_default, display_order)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE name = VALUES(name)`;
+          ON DUPLICATE KEY UPDATE name = VALUES(name), price_delta = VALUES(price_delta), calorie_delta = VALUES(calorie_delta), protein_delta = VALUES(protein_delta), carbs_delta = VALUES(carbs_delta), fat_delta = VALUES(fat_delta), is_default = VALUES(is_default), display_order = VALUES(display_order)`;
         await this.pool.query(sql, [
           opt.id,
           opt.name,
@@ -439,18 +572,57 @@ class DatabaseService {
     }
 
     // 8. Meals (62+ dishes)
-    const mealIdMap = new Map(); // fixtureMealId -> storedMealId
+    const mealIdMap = new Map(); // fixtureMealId / slug -> storedMealId
     for (const m of SEED_MEALS) {
       const realSellerId = sellerIdMap.get(m.seller_id) || m.seller_id;
       const realCatId = catIdMap.get(m.category_id) || m.category_id;
-      if (!realSellerId || !realCatId) continue;
+      if (!realSellerId) {
+        throw new Error(`[DB CRITICAL] Seed initialization error: Meal fixture '${m.id}' (${m.name}) seller_id '${m.seller_id}' could not be resolved.`);
+      }
+      if (!realCatId) {
+        throw new Error(`[DB CRITICAL] Seed initialization error: Meal fixture '${m.id}' (${m.name}) category_id '${m.category_id}' could not be resolved.`);
+      }
 
       if (this.mode === 'mysql') {
+        // Pre-write verification
+        const [sellerCheck] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE id = ?', [realSellerId]);
+        if (!sellerCheck || sellerCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Meal fixture '${m.id}' (${m.name}) initialization error: Parent seller '${realSellerId}' (resolved from fixture '${m.seller_id}') does not exist in seller_profiles table.`);
+        }
+        const [catCheck] = await this.pool.query('SELECT id FROM `categories` WHERE id = ?', [realCatId]);
+        if (!catCheck || catCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Meal fixture '${m.id}' (${m.name}) initialization error: Category '${realCatId}' (resolved from fixture '${m.category_id}') does not exist in categories table.`);
+        }
+
+        const [existingMeal] = await this.pool.query('SELECT id FROM `meals` WHERE slug = ?', [m.slug]);
+        const targetMealId = (existingMeal && existingMeal.length > 0) ? existingMeal[0].id : m.id;
+
         const sql = `INSERT INTO \`meals\` (id, seller_id, category_id, name, slug, description, cuisine, base_price, portion_choices, ingredients, allergens, dietary_tags, is_available, is_featured, is_tiffin_eligible, prep_time_minutes, calories, protein_grams, carbs_grams, fat_grams, image_url, rating, rating_count)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE name = VALUES(name), base_price = VALUES(base_price), is_available = VALUES(is_available), image_url = VALUES(image_url)`;
+          ON DUPLICATE KEY UPDATE
+            seller_id = VALUES(seller_id),
+            category_id = VALUES(category_id),
+            name = VALUES(name),
+            description = VALUES(description),
+            cuisine = VALUES(cuisine),
+            base_price = VALUES(base_price),
+            portion_choices = VALUES(portion_choices),
+            ingredients = VALUES(ingredients),
+            allergens = VALUES(allergens),
+            dietary_tags = VALUES(dietary_tags),
+            is_available = VALUES(is_available),
+            is_featured = VALUES(is_featured),
+            is_tiffin_eligible = VALUES(is_tiffin_eligible),
+            prep_time_minutes = VALUES(prep_time_minutes),
+            calories = VALUES(calories),
+            protein_grams = VALUES(protein_grams),
+            carbs_grams = VALUES(carbs_grams),
+            fat_grams = VALUES(fat_grams),
+            image_url = VALUES(image_url),
+            rating = VALUES(rating),
+            rating_count = VALUES(rating_count)`;
         await this.pool.query(sql, [
-          m.id,
+          targetMealId,
           realSellerId,
           realCatId,
           m.name,
@@ -478,8 +650,8 @@ class DatabaseService {
         const [rows] = await this.pool.query('SELECT id FROM `meals` WHERE slug = ?', [m.slug]);
         if (rows && rows.length > 0) {
           mealIdMap.set(m.id, rows[0].id);
-        } else {
-          mealIdMap.set(m.id, m.id);
+          mealIdMap.set(rows[0].id, rows[0].id);
+          mealIdMap.set(m.slug, rows[0].id);
         }
       } else {
         const existing = localStore.findOne('meals', r => r.slug === m.slug || r.id === m.id);
@@ -487,8 +659,10 @@ class DatabaseService {
           const inserted = { ...m, seller_id: realSellerId, category_id: realCatId };
           localStore.insert('meals', inserted);
           mealIdMap.set(m.id, inserted.id);
+          mealIdMap.set(inserted.id, inserted.id);
         } else {
           mealIdMap.set(m.id, existing.id);
+          mealIdMap.set(existing.id, existing.id);
         }
       }
     }
@@ -497,12 +671,19 @@ class DatabaseService {
     const planIdMap = new Map();
     for (const sp of SEED_SUBSCRIPTION_PLANS) {
       const realSellerId = sellerIdMap.get(sp.seller_id) || sp.seller_id;
-      if (!realSellerId) continue;
+      if (!realSellerId) {
+        throw new Error(`[DB CRITICAL] Seed initialization error: Subscription plan fixture '${sp.id}' (${sp.name}) seller_id '${sp.seller_id}' could not be resolved.`);
+      }
 
       if (this.mode === 'mysql') {
+        const [sCheck] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE id = ?', [realSellerId]);
+        if (!sCheck || sCheck.length === 0) {
+          throw new Error(`[DB CRITICAL] Subscription plan fixture '${sp.id}' (${sp.name}) initialization error: Parent seller '${realSellerId}' (resolved from fixture '${sp.seller_id}') does not exist in seller_profiles table.`);
+        }
+
         const sql = `INSERT INTO \`subscription_plans\` (id, seller_id, plan_type, name, description, cycle_days, delivery_frequency, supported_slots, base_price_per_meal, plan_discount_percent, max_skips_allowed, is_active)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE name = VALUES(name), base_price_per_meal = VALUES(base_price_per_meal)`;
+          ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), base_price_per_meal = VALUES(base_price_per_meal), plan_discount_percent = VALUES(plan_discount_percent), is_active = VALUES(is_active)`;
         await this.pool.query(sql, [
           sp.id,
           realSellerId,
@@ -533,7 +714,7 @@ class DatabaseService {
       if (this.mode === 'mysql') {
         const sql = `INSERT INTO \`coupons\` (id, code, description, discount_type, discount_value, max_discount_cap, min_order_amount, valid_from, valid_until, usage_limit_total, usage_limit_per_user, is_active)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE description = VALUES(description)`;
+          ON DUPLICATE KEY UPDATE description = VALUES(description), discount_value = VALUES(discount_value), is_active = VALUES(is_active)`;
         await this.pool.query(sql, [
           cpn.id,
           cpn.code,
@@ -556,309 +737,331 @@ class DatabaseService {
 
     // 11. Daily Rotating Menus
     const activeTiffinSellers = ['seller_01', 'seller_03', 'seller_04', 'seller_05'];
-    const resolvedTiffinSellers = activeTiffinSellers.map(sId => sellerIdMap.get(sId) || sId);
-    const menus = generateDailyTiffinMenus(resolvedTiffinSellers, SEED_MEALS);
+    const resolvedTiffinSellers = activeTiffinSellers
+      .map(sId => sellerIdMap.get(sId) || sId)
+      .filter(sId => sellerIdMap.has(sId));
+    
+    if (resolvedTiffinSellers.length > 0) {
+      const menus = generateDailyTiffinMenus(resolvedTiffinSellers, SEED_MEALS);
 
-    for (const m of menus) {
-      const realSellerId = sellerIdMap.get(m.seller_id) || m.seller_id;
-      const realMealId = mealIdMap.get(m.meal_id) || m.meal_id;
-      const realAltId = m.alternative_meal_id ? (mealIdMap.get(m.alternative_meal_id) || m.alternative_meal_id) : null;
-      if (!realSellerId || !realMealId) continue;
+      for (const m of menus) {
+        const realSellerId = sellerIdMap.get(m.seller_id) || m.seller_id;
+        const realMealId = mealIdMap.get(m.meal_id) || m.meal_id;
+        const realAltId = m.alternative_meal_id ? (mealIdMap.get(m.alternative_meal_id) || m.alternative_meal_id) : null;
+        if (!realSellerId) {
+          throw new Error(`[DB CRITICAL] Daily tiffin menu '${m.id}' initialization error: Seller '${m.seller_id}' could not be resolved.`);
+        }
+        if (!realMealId) {
+          throw new Error(`[DB CRITICAL] Daily tiffin menu '${m.id}' initialization error: Meal '${m.meal_id}' could not be resolved.`);
+        }
 
-      if (this.mode === 'mysql') {
-        const sql = `INSERT INTO \`daily_tiffin_menus\` (id, seller_id, menu_date, slot, meal_id, alternative_meal_id, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE meal_id = VALUES(meal_id), alternative_meal_id = VALUES(alternative_meal_id)`;
-        await this.pool.query(sql, [m.id, realSellerId, m.menu_date, m.slot, realMealId, realAltId, m.notes]);
-      } else {
-        const existing = localStore.findOne('daily_tiffin_menus', r => r.seller_id === realSellerId && r.menu_date === m.menu_date && r.slot === m.slot);
-        if (!existing) {
-          localStore.insert('daily_tiffin_menus', { ...m, seller_id: realSellerId, meal_id: realMealId, alternative_meal_id: realAltId });
+        if (this.mode === 'mysql') {
+          const [sCheck] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE id = ?', [realSellerId]);
+          if (!sCheck || sCheck.length === 0) {
+            throw new Error(`[DB CRITICAL] Daily tiffin menu '${m.id}' initialization error: Seller '${realSellerId}' not found in seller_profiles table.`);
+          }
+          const [mCheck] = await this.pool.query('SELECT id FROM `meals` WHERE id = ?', [realMealId]);
+          if (!mCheck || mCheck.length === 0) {
+            throw new Error(`[DB CRITICAL] Daily tiffin menu '${m.id}' initialization error: Meal '${realMealId}' not found in meals table.`);
+          }
+
+          let validAltId = null;
+          if (realAltId) {
+            const [altCheck] = await this.pool.query('SELECT id FROM `meals` WHERE id = ?', [realAltId]);
+            if (!altCheck || altCheck.length === 0) {
+              throw new Error(`[DB CRITICAL] Daily tiffin menu '${m.id}' initialization error: Alternative meal '${realAltId}' not found in meals table.`);
+            }
+            validAltId = realAltId;
+          }
+
+          const sql = `INSERT INTO \`daily_tiffin_menus\` (id, seller_id, menu_date, slot, meal_id, alternative_meal_id, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE meal_id = VALUES(meal_id), alternative_meal_id = VALUES(alternative_meal_id)`;
+          await this.pool.query(sql, [m.id, realSellerId, m.menu_date, m.slot, realMealId, validAltId, m.notes]);
+        } else {
+          const existing = localStore.findOne('daily_tiffin_menus', r => r.seller_id === realSellerId && r.menu_date === m.menu_date && r.slot === m.slot);
+          if (!existing) {
+            localStore.insert('daily_tiffin_menus', { ...m, seller_id: realSellerId, meal_id: realMealId, alternative_meal_id: realAltId });
+          }
         }
       }
     }
 
     // 12. Sample active subscription & scheduled deliveries
-    const realCustId = userIdMap.get('user_cust_01') || 'user_cust_01';
-    const realSeller01 = sellerIdMap.get('seller_01') || 'seller_01';
+    const realCustId = userIdMap.get('user_cust_01');
+    const realSeller01 = sellerIdMap.get('seller_01');
     const realPlan01 = planIdMap.get('sub_plan_01') || 'sub_plan_01';
     const realAddr01 = addrIdMap.get('addr_01') || 'addr_01';
 
-    const startDate = new Date().toISOString().split('T')[0];
-    const origEndDateObj = new Date();
-    origEndDateObj.setDate(origEndDateObj.getDate() + 28);
-    const origEndDate = origEndDateObj.toISOString().split('T')[0];
+    if (realCustId && realSeller01) {
+      const startDate = new Date().toISOString().split('T')[0];
+      const origEndDateObj = new Date();
+      origEndDateObj.setDate(origEndDateObj.getDate() + 28);
+      const origEndDate = origEndDateObj.toISOString().split('T')[0];
 
-    const sampleSub = {
-      id: 'sub_demo_01',
-      subscription_number: 'SUB-2026-8801',
-      customer_id: realCustId,
-      seller_id: realSeller01,
-      plan_id: realPlan01,
-      address_id: realAddr01,
-      slot: 'both',
-      start_date: startDate,
-      original_end_date: origEndDate,
-      revised_end_date: origEndDate,
-      total_meals_purchased: 56,
-      meals_delivered_count: 6,
-      meals_skipped_count: 1,
-      max_skips_allowed: 2,
-      price_per_meal: 106.25,
-      subtotal: 5950.00,
-      discount_amount: 1050.00,
-      delivery_fee: 0.00,
-      tax_amount: 245.00,
-      grand_total: 5145.00,
-      status: 'active',
-      payment_status: 'paid'
-    };
-
-    let storedSubId = sampleSub.id;
-    if (this.mode === 'mysql') {
-      const sql = `INSERT INTO \`subscriptions\` (id, subscription_number, customer_id, seller_id, plan_id, address_id, slot, start_date, original_end_date, revised_end_date, total_meals_purchased, meals_delivered_count, meals_skipped_count, max_skips_allowed, price_per_meal, subtotal, discount_amount, delivery_fee, tax_amount, grand_total, status, payment_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE status = VALUES(status), payment_status = VALUES(payment_status)`;
-      await this.pool.query(sql, [
-        sampleSub.id,
-        sampleSub.subscription_number,
-        sampleSub.customer_id,
-        sampleSub.seller_id,
-        sampleSub.plan_id,
-        sampleSub.address_id,
-        sampleSub.slot,
-        sampleSub.start_date,
-        sampleSub.original_end_date,
-        sampleSub.revised_end_date,
-        sampleSub.total_meals_purchased,
-        sampleSub.meals_delivered_count,
-        sampleSub.meals_skipped_count,
-        sampleSub.max_skips_allowed,
-        sampleSub.price_per_meal,
-        sampleSub.subtotal,
-        sampleSub.discount_amount,
-        sampleSub.delivery_fee,
-        sampleSub.tax_amount,
-        sampleSub.grand_total,
-        sampleSub.status,
-        sampleSub.payment_status
-      ]);
-
-      const [rows] = await this.pool.query('SELECT id FROM `subscriptions` WHERE subscription_number = ?', [sampleSub.subscription_number]);
-      if (rows && rows.length > 0) storedSubId = rows[0].id;
-    } else {
-      const existing = localStore.findOne('subscriptions', r => r.subscription_number === sampleSub.subscription_number);
-      if (!existing) {
-        localStore.insert('subscriptions', sampleSub);
-      } else {
-        storedSubId = existing.id;
-      }
-    }
-
-    // 13. Scheduled deliveries
-    const meal006Id = mealIdMap.get('meal_006') || 'meal_006';
-    const meal007Id = mealIdMap.get('meal_007') || 'meal_007';
-
-    for (let day = 0; day < 28; day++) {
-      const dObj = new Date();
-      dObj.setDate(dObj.getDate() + day);
-      const dStr = dObj.toISOString().split('T')[0];
-      const isPast = day < 3;
-      const isSkipped = day === 1;
-
-      const lunchDelivery = {
-        id: `sched_${storedSubId}_${dStr}_lunch`,
-        subscription_id: storedSubId,
-        delivery_date: dStr,
-        slot: 'lunch',
-        scheduled_meal_id: meal006Id,
-        chosen_meal_id: meal006Id,
-        customizations: { base: 'Brown Rice', spice: 'Medium', removals: ['No Garlic'] },
-        status: isSkipped ? 'skipped' : (isPast ? 'delivered' : 'scheduled'),
-        is_skipped: isSkipped,
-        skip_reason: isSkipped ? 'Traveling on Tuesday' : null,
-        delivered_at: isPast && !isSkipped ? `${dStr} 13:10:00` : null
+      const sampleSub = {
+        id: 'sub_demo_01',
+        subscription_number: 'SUB-2026-8801',
+        customer_id: realCustId,
+        seller_id: realSeller01,
+        plan_id: realPlan01,
+        address_id: realAddr01,
+        slot: 'both',
+        start_date: startDate,
+        original_end_date: origEndDate,
+        revised_end_date: origEndDate,
+        total_meals_purchased: 56,
+        meals_delivered_count: 6,
+        meals_skipped_count: 1,
+        max_skips_allowed: 2,
+        price_per_meal: 106.25,
+        subtotal: 5950.00,
+        discount_amount: 1050.00,
+        delivery_fee: 0.00,
+        tax_amount: 245.00,
+        grand_total: 5145.00,
+        status: 'active',
+        payment_status: 'paid'
       };
 
-      const dinnerDelivery = {
-        id: `sched_${storedSubId}_${dStr}_dinner`,
-        subscription_id: storedSubId,
-        delivery_date: dStr,
-        slot: 'dinner',
-        scheduled_meal_id: meal007Id,
-        chosen_meal_id: meal007Id,
-        customizations: { base: 'Multigrain Phulka (3 Pcs)', spice: 'Mild' },
-        status: isSkipped ? 'skipped' : (isPast ? 'delivered' : 'scheduled'),
-        is_skipped: isSkipped,
-        skip_reason: isSkipped ? 'Traveling on Tuesday' : null,
-        delivered_at: isPast && !isSkipped ? `${dStr} 20:25:00` : null
-      };
-
+      let storedSubId = sampleSub.id;
       if (this.mode === 'mysql') {
-        const sql = `INSERT INTO \`scheduled_deliveries\` (id, subscription_id, delivery_date, slot, scheduled_meal_id, chosen_meal_id, customizations, status, is_skipped, skip_reason, delivered_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE status = VALUES(status)`;
-        await this.pool.query(sql, [
-          lunchDelivery.id,
-          lunchDelivery.subscription_id,
-          lunchDelivery.delivery_date,
-          lunchDelivery.slot,
-          lunchDelivery.scheduled_meal_id,
-          lunchDelivery.chosen_meal_id,
-          JSON.stringify(lunchDelivery.customizations),
-          lunchDelivery.status,
-          lunchDelivery.is_skipped,
-          lunchDelivery.skip_reason,
-          lunchDelivery.delivered_at
-        ]);
-        await this.pool.query(sql, [
-          dinnerDelivery.id,
-          dinnerDelivery.subscription_id,
-          dinnerDelivery.delivery_date,
-          dinnerDelivery.slot,
-          dinnerDelivery.scheduled_meal_id,
-          dinnerDelivery.chosen_meal_id,
-          JSON.stringify(dinnerDelivery.customizations),
-          dinnerDelivery.status,
-          dinnerDelivery.is_skipped,
-          dinnerDelivery.skip_reason,
-          dinnerDelivery.delivered_at
-        ]);
+        const [cCheck] = await this.pool.query('SELECT id FROM `users` WHERE id = ?', [realCustId]);
+        const [sCheck] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE id = ?', [realSeller01]);
+        const [pCheck] = await this.pool.query('SELECT id FROM `subscription_plans` WHERE id = ?', [realPlan01]);
+        const [aCheck] = await this.pool.query('SELECT id FROM `addresses` WHERE id = ?', [realAddr01]);
+
+        if (cCheck?.length && sCheck?.length && pCheck?.length && aCheck?.length) {
+          const sql = `INSERT INTO \`subscriptions\` (id, subscription_number, customer_id, seller_id, plan_id, address_id, slot, start_date, original_end_date, revised_end_date, total_meals_purchased, meals_delivered_count, meals_skipped_count, max_skips_allowed, price_per_meal, subtotal, discount_amount, delivery_fee, tax_amount, grand_total, status, payment_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE status = VALUES(status), payment_status = VALUES(payment_status)`;
+          await this.pool.query(sql, [
+            sampleSub.id,
+            sampleSub.subscription_number,
+            sampleSub.customer_id,
+            sampleSub.seller_id,
+            sampleSub.plan_id,
+            sampleSub.address_id,
+            sampleSub.slot,
+            sampleSub.start_date,
+            sampleSub.original_end_date,
+            sampleSub.revised_end_date,
+            sampleSub.total_meals_purchased,
+            sampleSub.meals_delivered_count,
+            sampleSub.meals_skipped_count,
+            sampleSub.max_skips_allowed,
+            sampleSub.price_per_meal,
+            sampleSub.subtotal,
+            sampleSub.discount_amount,
+            sampleSub.delivery_fee,
+            sampleSub.tax_amount,
+            sampleSub.grand_total,
+            sampleSub.status,
+            sampleSub.payment_status
+          ]);
+
+          const [rows] = await this.pool.query('SELECT id FROM `subscriptions` WHERE subscription_number = ?', [sampleSub.subscription_number]);
+          if (rows && rows.length > 0) storedSubId = rows[0].id;
+
+          // 13. Scheduled deliveries
+          const meal006Id = mealIdMap.get('meal_006');
+          const meal007Id = mealIdMap.get('meal_007');
+
+          if (meal006Id && meal007Id) {
+            for (let day = 0; day < 28; day++) {
+              const dObj = new Date();
+              dObj.setDate(dObj.getDate() + day);
+              const dStr = dObj.toISOString().split('T')[0];
+              const isPast = day < 3;
+              const isSkipped = day === 1;
+
+              const lunchDelivery = {
+                id: `sched_${storedSubId}_${dStr}_lunch`,
+                subscription_id: storedSubId,
+                delivery_date: dStr,
+                slot: 'lunch',
+                scheduled_meal_id: meal006Id,
+                chosen_meal_id: meal006Id,
+                customizations: { base: 'Brown Rice', spice: 'Medium', removals: ['No Garlic'] },
+                status: isSkipped ? 'skipped' : (isPast ? 'delivered' : 'scheduled'),
+                is_skipped: isSkipped,
+                skip_reason: isSkipped ? 'Traveling on Tuesday' : null,
+                delivered_at: isPast && !isSkipped ? `${dStr} 13:10:00` : null
+              };
+
+              const dinnerDelivery = {
+                id: `sched_${storedSubId}_${dStr}_dinner`,
+                subscription_id: storedSubId,
+                delivery_date: dStr,
+                slot: 'dinner',
+                scheduled_meal_id: meal007Id,
+                chosen_meal_id: meal007Id,
+                customizations: { base: 'Multigrain Phulka (3 Pcs)', spice: 'Mild' },
+                status: isSkipped ? 'skipped' : (isPast ? 'delivered' : 'scheduled'),
+                is_skipped: isSkipped,
+                skip_reason: isSkipped ? 'Traveling on Tuesday' : null,
+                delivered_at: isPast && !isSkipped ? `${dStr} 20:25:00` : null
+              };
+
+              const sqlDeliv = `INSERT INTO \`scheduled_deliveries\` (id, subscription_id, delivery_date, slot, scheduled_meal_id, chosen_meal_id, customizations, status, is_skipped, skip_reason, delivered_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE status = VALUES(status)`;
+              await this.pool.query(sqlDeliv, [
+                lunchDelivery.id,
+                lunchDelivery.subscription_id,
+                lunchDelivery.delivery_date,
+                lunchDelivery.slot,
+                lunchDelivery.scheduled_meal_id,
+                lunchDelivery.chosen_meal_id,
+                JSON.stringify(lunchDelivery.customizations),
+                lunchDelivery.status,
+                lunchDelivery.is_skipped,
+                lunchDelivery.skip_reason,
+                lunchDelivery.delivered_at
+              ]);
+              await this.pool.query(sqlDeliv, [
+                dinnerDelivery.id,
+                dinnerDelivery.subscription_id,
+                dinnerDelivery.delivery_date,
+                dinnerDelivery.slot,
+                dinnerDelivery.scheduled_meal_id,
+                dinnerDelivery.chosen_meal_id,
+                JSON.stringify(dinnerDelivery.customizations),
+                dinnerDelivery.status,
+                dinnerDelivery.is_skipped,
+                dinnerDelivery.skip_reason,
+                dinnerDelivery.delivered_at
+              ]);
+            }
+          }
+        }
       } else {
-        const exLunch = localStore.findOne('scheduled_deliveries', r => r.subscription_id === storedSubId && r.delivery_date === dStr && r.slot === 'lunch');
-        if (!exLunch) localStore.insert('scheduled_deliveries', lunchDelivery);
-        const exDinner = localStore.findOne('scheduled_deliveries', r => r.subscription_id === storedSubId && r.delivery_date === dStr && r.slot === 'dinner');
-        if (!exDinner) localStore.insert('scheduled_deliveries', dinnerDelivery);
+        const existing = localStore.findOne('subscriptions', r => r.subscription_number === sampleSub.subscription_number);
+        if (!existing) {
+          localStore.insert('subscriptions', sampleSub);
+        } else {
+          storedSubId = existing.id;
+        }
       }
     }
 
     // 14. Demo orders
-    const sampleOrder1 = {
-      id: 'ord_demo_01',
-      order_number: 'FB-ORD-9011',
-      customer_id: realCustId,
-      seller_id: realSeller01,
-      address_id: realAddr01,
-      order_type: 'instant_restaurant',
-      status: 'out_for_delivery',
-      subtotal: 298.00,
-      customization_total: 45.00,
-      discount_amount: 50.00,
-      coupon_code: 'FITBITE50',
-      delivery_fee: 35.00,
-      tax_amount: 16.40,
-      grand_total: 344.40,
-      payment_status: 'paid',
-      payment_method: 'demo_upi',
-      payment_transaction_id: 'TXN_UPI_DEMO_99881',
-      delivery_slot: 'Instant Delivery',
-      leave_at_doorstep: false,
-      exchange_steel_dabba: true,
-      delivery_instructions: 'Ring bell once. Please place box on doorstep hook.'
-    };
+    if (realCustId && realSeller01) {
+      const sampleOrder1 = {
+        id: 'ord_demo_01',
+        order_number: 'FB-ORD-9011',
+        customer_id: realCustId,
+        seller_id: realSeller01,
+        address_id: realAddr01,
+        order_type: 'instant_restaurant',
+        status: 'out_for_delivery',
+        subtotal: 298.00,
+        customization_total: 45.00,
+        discount_amount: 50.00,
+        coupon_code: 'FITBITE50',
+        delivery_fee: 35.00,
+        tax_amount: 16.40,
+        grand_total: 344.40,
+        payment_status: 'paid',
+        payment_method: 'demo_upi',
+        payment_transaction_id: 'TXN_UPI_DEMO_99881',
+        delivery_slot: 'Instant Delivery',
+        leave_at_doorstep: false,
+        exchange_steel_dabba: true,
+        delivery_instructions: 'Ring bell once. Please place box on doorstep hook.'
+      };
 
-    let storedOrderId = sampleOrder1.id;
-    if (this.mode === 'mysql') {
-      const sql = `INSERT INTO \`orders\` (id, order_number, customer_id, seller_id, address_id, order_type, status, subtotal, customization_total, discount_amount, coupon_code, delivery_fee, tax_amount, grand_total, payment_status, payment_method, payment_transaction_id, delivery_slot, leave_at_doorstep, exchange_steel_dabba, delivery_instructions)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE status = VALUES(status)`;
-      await this.pool.query(sql, [
-        sampleOrder1.id,
-        sampleOrder1.order_number,
-        sampleOrder1.customer_id,
-        sampleOrder1.seller_id,
-        sampleOrder1.address_id,
-        sampleOrder1.order_type,
-        sampleOrder1.status,
-        sampleOrder1.subtotal,
-        sampleOrder1.customization_total,
-        sampleOrder1.discount_amount,
-        sampleOrder1.coupon_code,
-        sampleOrder1.delivery_fee,
-        sampleOrder1.tax_amount,
-        sampleOrder1.grand_total,
-        sampleOrder1.payment_status,
-        sampleOrder1.payment_method,
-        sampleOrder1.payment_transaction_id,
-        sampleOrder1.delivery_slot,
-        sampleOrder1.leave_at_doorstep,
-        sampleOrder1.exchange_steel_dabba,
-        sampleOrder1.delivery_instructions
-      ]);
+      let storedOrderId = sampleOrder1.id;
+      if (this.mode === 'mysql') {
+        const [cCheck] = await this.pool.query('SELECT id FROM `users` WHERE id = ?', [realCustId]);
+        const [sCheck] = await this.pool.query('SELECT id FROM `seller_profiles` WHERE id = ?', [realSeller01]);
+        const [aCheck] = await this.pool.query('SELECT id FROM `addresses` WHERE id = ?', [realAddr01]);
 
-      const [rows] = await this.pool.query('SELECT id FROM `orders` WHERE order_number = ?', [sampleOrder1.order_number]);
-      if (rows && rows.length > 0) storedOrderId = rows[0].id;
-    } else {
-      const existing = localStore.findOne('orders', r => r.order_number === sampleOrder1.order_number);
-      if (!existing) {
-        localStore.insert('orders', sampleOrder1);
+        if (cCheck?.length && sCheck?.length && aCheck?.length) {
+          const sql = `INSERT INTO \`orders\` (id, order_number, customer_id, seller_id, address_id, order_type, status, subtotal, customization_total, discount_amount, coupon_code, delivery_fee, tax_amount, grand_total, payment_status, payment_method, payment_transaction_id, delivery_slot, leave_at_doorstep, exchange_steel_dabba, delivery_instructions)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE status = VALUES(status)`;
+          await this.pool.query(sql, [
+            sampleOrder1.id,
+            sampleOrder1.order_number,
+            sampleOrder1.customer_id,
+            sampleOrder1.seller_id,
+            sampleOrder1.address_id,
+            sampleOrder1.order_type,
+            sampleOrder1.status,
+            sampleOrder1.subtotal,
+            sampleOrder1.customization_total,
+            sampleOrder1.discount_amount,
+            sampleOrder1.coupon_code,
+            sampleOrder1.delivery_fee,
+            sampleOrder1.tax_amount,
+            sampleOrder1.grand_total,
+            sampleOrder1.payment_status,
+            sampleOrder1.payment_method,
+            sampleOrder1.payment_transaction_id,
+            sampleOrder1.delivery_slot,
+            sampleOrder1.leave_at_doorstep,
+            sampleOrder1.exchange_steel_dabba,
+            sampleOrder1.delivery_instructions
+          ]);
+
+          const [rows] = await this.pool.query('SELECT id FROM `orders` WHERE order_number = ?', [sampleOrder1.order_number]);
+          if (rows && rows.length > 0) storedOrderId = rows[0].id;
+
+          const meal007Id = mealIdMap.get('meal_007');
+          if (meal007Id) {
+            const sqlItem = `INSERT INTO \`order_items\` (id, order_id, meal_id, meal_name_snapshot, meal_image_snapshot, quantity, portion_snapshot, unit_base_price, customizations_snapshot, unit_final_price, item_total_price, special_notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON DUPLICATE KEY UPDATE quantity = VALUES(quantity)`;
+            await this.pool.query(sqlItem, [
+              'oi_01',
+              storedOrderId,
+              meal007Id,
+              'Special Paneer Subzi Tiffin Meal',
+              'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
+              2,
+              'Standard (4 Phulkas)',
+              155.00,
+              JSON.stringify({ base: 'Brown Rice (+₹20)', protein: 'Extra Malai Paneer (+₹45)', spice: 'Medium', removals: ['No Garlic'] }),
+              171.50,
+              343.00,
+              'Extra fresh phulkas please'
+            ]);
+          }
+
+          const sqlTrack = `INSERT INTO \`delivery_tracking_events\` (id, order_id, event_status, title, description, latitude, longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE title = VALUES(title)`;
+          await this.pool.query(sqlTrack, ['track_01', storedOrderId, 'confirmed', 'Order Confirmed', 'Annapurna Homestyle Tiffin Ghar accepted your order.', 12.9716, 77.5946]);
+          await this.pool.query(sqlTrack, ['track_02', storedOrderId, 'preparing', 'Cooking in Kitchen', 'Chef is preparing your fresh meal with requested customizations.', 12.9716, 77.5946]);
+          await this.pool.query(sqlTrack, ['track_03', storedOrderId, 'out_for_delivery', 'Out for Delivery', 'Rider Vikram Jadhav is on the way with your hot meal in insulated dabba bag.', 12.9780, 77.6350]);
+        }
       } else {
-        storedOrderId = existing.id;
-      }
-    }
-
-    if (this.mode === 'mysql') {
-      const sqlItem = `INSERT INTO \`order_items\` (id, order_id, meal_id, meal_name_snapshot, meal_image_snapshot, quantity, portion_snapshot, unit_base_price, customizations_snapshot, unit_final_price, item_total_price, special_notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE quantity = VALUES(quantity)`;
-      await this.pool.query(sqlItem, [
-        'oi_01',
-        storedOrderId,
-        meal007Id,
-        'Special Paneer Subzi Tiffin Meal',
-        'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
-        2,
-        'Standard (4 Phulkas)',
-        155.00,
-        JSON.stringify({ base: 'Brown Rice (+₹20)', protein: 'Extra Malai Paneer (+₹45)', spice: 'Medium', removals: ['No Garlic'] }),
-        171.50,
-        343.00,
-        'Extra fresh phulkas please'
-      ]);
-
-      const sqlTrack = `INSERT INTO \`delivery_tracking_events\` (id, order_id, event_status, title, description, latitude, longitude)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE title = VALUES(title)`;
-      await this.pool.query(sqlTrack, ['track_01', storedOrderId, 'confirmed', 'Order Confirmed', 'Annapurna Homestyle Tiffin Ghar accepted your order.', 12.9716, 77.5946]);
-      await this.pool.query(sqlTrack, ['track_02', storedOrderId, 'preparing', 'Cooking in Kitchen', 'Chef is preparing your fresh meal with requested customizations.', 12.9716, 77.5946]);
-      await this.pool.query(sqlTrack, ['track_03', storedOrderId, 'out_for_delivery', 'Out for Delivery', 'Rider Vikram Jadhav is on the way with your hot meal in insulated dabba bag.', 12.9780, 77.6350]);
-    } else {
-      const exItem = localStore.findOne('order_items', r => r.id === 'oi_01');
-      if (!exItem) {
-        localStore.insert('order_items', {
-          id: 'oi_01',
-          order_id: storedOrderId,
-          meal_id: meal007Id,
-          meal_name_snapshot: 'Special Paneer Subzi Tiffin Meal',
-          meal_image_snapshot: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?auto=format&fit=crop&w=800&q=80',
-          quantity: 2,
-          portion_snapshot: 'Standard (4 Phulkas)',
-          unit_base_price: 155.00,
-          customizations_snapshot: { base: 'Brown Rice (+₹20)', protein: 'Extra Malai Paneer (+₹45)', spice: 'Medium', removals: ['No Garlic'] },
-          unit_final_price: 171.50,
-          item_total_price: 343.00,
-          special_notes: 'Extra fresh phulkas please'
-        });
-      }
-      const exTrack = localStore.findOne('delivery_tracking_events', r => r.id === 'track_01');
-      if (!exTrack) {
-        localStore.insert('delivery_tracking_events', { id: 'track_01', order_id: storedOrderId, event_status: 'confirmed', title: 'Order Confirmed', description: 'Annapurna Homestyle Tiffin Ghar accepted your order.', latitude: 12.9716, longitude: 77.5946 });
-        localStore.insert('delivery_tracking_events', { id: 'track_02', order_id: storedOrderId, event_status: 'preparing', title: 'Cooking in Kitchen', description: 'Chef is preparing your fresh meal with requested customizations.', latitude: 12.9716, longitude: 77.5946 });
-        localStore.insert('delivery_tracking_events', { id: 'track_03', order_id: storedOrderId, event_status: 'out_for_delivery', title: 'Out for Delivery', description: 'Rider Vikram Jadhav is on the way with your hot meal in insulated dabba bag.', latitude: 12.9780, longitude: 77.6350 });
+        const existing = localStore.findOne('orders', r => r.order_number === sampleOrder1.order_number);
+        if (!existing) {
+          localStore.insert('orders', sampleOrder1);
+        } else {
+          storedOrderId = existing.id;
+        }
       }
     }
 
     // 15. Audit Log
-    const realAdminId = userIdMap.get('user_admin_01') || 'user_admin_01';
-    if (this.mode === 'mysql') {
-      const sqlAudit = `INSERT INTO \`audit_logs\` (id, actor_id, actor_email, action, entity_type, entity_id, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE action = VALUES(action)`;
-      await this.pool.query(sqlAudit, ['audit_01', realAdminId, 'admin@fitbite.demo', 'SYSTEM_BOOTSTRAP', 'platform', 'fitbite_core', JSON.stringify({ message: 'FitBite system seeded and initialized successfully.' })]);
-    } else {
-      const exAudit = localStore.findOne('audit_logs', r => r.id === 'audit_01');
-      if (!exAudit) {
-        localStore.insert('audit_logs', { id: 'audit_01', actor_id: realAdminId, actor_email: 'admin@fitbite.demo', action: 'SYSTEM_BOOTSTRAP', entity_type: 'platform', entity_id: 'fitbite_core', details: { message: 'FitBite system seeded and initialized successfully.' } });
+    const realAdminId = userIdMap.get('user_admin_01');
+    if (realAdminId) {
+      if (this.mode === 'mysql') {
+        const [uCheck] = await this.pool.query('SELECT id FROM `users` WHERE id = ?', [realAdminId]);
+        if (uCheck && uCheck.length > 0) {
+          const sqlAudit = `INSERT INTO \`audit_logs\` (id, actor_id, actor_email, action, entity_type, entity_id, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE action = VALUES(action)`;
+          await this.pool.query(sqlAudit, ['audit_01', realAdminId, 'admin@fitbite.demo', 'SYSTEM_BOOTSTRAP', 'platform', 'fitbite_core', JSON.stringify({ message: 'FitBite system seeded and initialized successfully.' })]);
+        }
+      } else {
+        const exAudit = localStore.findOne('audit_logs', r => r.id === 'audit_01');
+        if (!exAudit) {
+          localStore.insert('audit_logs', { id: 'audit_01', actor_id: realAdminId, actor_email: 'admin@fitbite.demo', action: 'SYSTEM_BOOTSTRAP', entity_type: 'platform', entity_id: 'fitbite_core', details: { message: 'FitBite system seeded and initialized successfully.' } });
+        }
       }
     }
 
