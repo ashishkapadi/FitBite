@@ -114,6 +114,9 @@ export function CartProvider({ children }) {
     setConflictModalData(null);
   };
 
+  const [removingIds, setRemovingIds] = useState(new Set());
+  const [removalError, setRemovalError] = useState(null);
+
   const updateQuantity = async (itemId, quantity) => {
     try {
       await apiFetch(`/api/cart/items/${itemId}`, {
@@ -126,14 +129,40 @@ export function CartProvider({ children }) {
     }
   };
 
-  const removeItem = async (itemId) => {
+  const removeFromCart = async (target) => {
+    const itemId = typeof target === 'object' && target !== null ? (target.id || target.meal_id) : target;
+    if (!itemId) return { error: 'Invalid cart item identifier.' };
+
+    // Prevent repeated clicks while removal is pending
+    if (removingIds.has(itemId)) return;
+
+    setRemovingIds(prev => new Set([...prev, itemId]));
+    setRemovalError(null);
+
     try {
-      await apiFetch(`/api/cart/items/${itemId}`, {
+      const res = await apiFetch(`/api/cart/items/${itemId}`, {
         method: 'DELETE'
       });
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to remove item from cart.');
+      }
+
+      // Re-fetch cart from server to update subtotal, badge, discounts, and items
       await fetchCart();
+      return { success: true };
     } catch (err) {
-      console.error('[CartContext] removeItem error:', err);
+      console.error('[CartContext] removeFromCart error:', err);
+      const errMsg = err.message || 'Server error removing item from cart.';
+      setRemovalError(errMsg);
+      throw err;
+    } finally {
+      setRemovingIds(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
     }
   };
 
@@ -148,6 +177,8 @@ export function CartProvider({ children }) {
     }
   };
 
+  const isItemRemoving = (id) => removingIds.has(id);
+
   return (
     <CartContext.Provider
       value={{
@@ -157,13 +188,17 @@ export function CartProvider({ children }) {
         subtotal,
         itemCount,
         loading,
+        removingIds,
+        isItemRemoving,
+        removalError,
         conflictModalData,
         confirmReplaceCart,
         cancelConflict,
         fetchCart,
         addToCart,
         updateQuantity,
-        removeItem,
+        removeFromCart,
+        removeItem: removeFromCart,
         clearCart
       }}
     >

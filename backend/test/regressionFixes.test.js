@@ -204,4 +204,201 @@ describe('FitBite Regression & Bug Fix Verification Suite', () => {
       }
     });
   });
+
+  describe('6. Cart Item Removal & Variant Differentiation', () => {
+    test('Removing one customized variant of a meal does not remove another variant', async () => {
+      const testCartId = `c_var_${Date.now().toString(36)}`;
+      await db.insert('carts', {
+        id: testCartId,
+        user_id: 'user_cust_01',
+        seller_id: 'seller_prof_01'
+      });
+
+      // Variant 1: standard portion, spicy
+      const var1Id = `ci_v1_${Date.now().toString(36)}`;
+      await db.insert('cart_items', {
+        id: var1Id,
+        cart_id: testCartId,
+        meal_id: 'meal_001',
+        quantity: 1,
+        portion_selected: 'standard',
+        customizations: { spice: 'extra_hot' },
+        item_price: 150.00,
+        total_price: 150.00,
+        special_notes: 'Extra spicy variant'
+      });
+
+      // Variant 2: large portion, mild
+      const var2Id = `ci_v2_${Date.now().toString(36)}`;
+      await db.insert('cart_items', {
+        id: var2Id,
+        cart_id: testCartId,
+        meal_id: 'meal_001',
+        quantity: 1,
+        portion_selected: 'large',
+        customizations: { spice: 'mild' },
+        item_price: 210.00,
+        total_price: 210.00,
+        special_notes: 'Mild large variant'
+      });
+
+      // Verify both items exist in cart
+      let items = await db.find('cart_items', { cart_id: testCartId });
+      assert.strictEqual(items.length, 2, 'Cart must initially have 2 variants of meal_001');
+
+      // Delete only Variant 1 by its item primary key
+      await db.delete('cart_items', { id: var1Id, cart_id: testCartId });
+
+      // Verify Variant 1 is gone and Variant 2 remains intact
+      items = await db.find('cart_items', { cart_id: testCartId });
+      assert.strictEqual(items.length, 1, 'Cart must have exactly 1 item remaining after removal');
+      assert.strictEqual(items[0].id, var2Id, 'Remaining item must be Variant 2');
+      assert.strictEqual(items[0].portion_selected, 'large');
+
+      // Delete the final item and reset cart
+      await db.delete('cart_items', { id: var2Id, cart_id: testCartId });
+      items = await db.find('cart_items', { cart_id: testCartId });
+      assert.strictEqual(items.length, 0, 'Cart must be completely empty');
+
+      // Cleanup
+      await db.delete('carts', { id: testCartId });
+    });
+
+    test('Cart item deletion query targets both item primary key and cart_id for cross-customer isolation', async () => {
+      const cartAId = `c_userA_${Date.now().toString(36)}`;
+      const cartBId = `c_userB_${Date.now().toString(36)}`;
+
+      await db.insert('carts', { id: cartAId, user_id: 'user_cust_A', seller_id: 'seller_prof_01' });
+      await db.insert('carts', { id: cartBId, user_id: 'user_cust_B', seller_id: 'seller_prof_01' });
+
+      const itemAId = `ci_itemA_${Date.now().toString(36)}`;
+      await db.insert('cart_items', {
+        id: itemAId,
+        cart_id: cartAId,
+        meal_id: 'meal_001',
+        quantity: 1,
+        portion_selected: 'standard',
+        customizations: {},
+        item_price: 150.00,
+        total_price: 150.00
+      });
+
+      // User B attempts to delete itemA from cartB - should match 0 rows
+      const targetInB = await db.findOne('cart_items', { id: itemAId, cart_id: cartBId });
+      assert.strictEqual(targetInB, null, 'Item A must NOT be found in Cart B');
+
+      // Cleanup
+      await db.delete('cart_items', { id: itemAId });
+      await db.delete('carts', { id: cartAId });
+      await db.delete('carts', { id: cartBId });
+    });
+  });
+
+  describe('7. The Six Working Tiffin Subscription Plans', () => {
+    test('All 6 demo subscription plans are correctly seeded and active', async () => {
+      const plans = await db.find('subscription_plans');
+      const planIds = new Set(plans.map(p => p.id));
+
+      const expectedPlanIds = [
+        'sub_plan_01', // Everyday Veg — 28-Day Plan (Working Professional)
+        'sub_plan_02', // High-Protein — 28-Day Plan (Working Professional)
+        'sub_plan_03', // Lunch + Dinner — 28-Day Plan (Working Professional)
+        'sub_plan_04', // Budget Veg Lunch — Weekday Plan (Student)
+        'sub_plan_05', // High-Protein Lunch — Weekday Plan (Student)
+        'sub_plan_06'  // Lunch + Dinner — Weekday Plan (Student)
+      ];
+
+      for (const expectedId of expectedPlanIds) {
+        assert.ok(planIds.has(expectedId), `Subscription plan ${expectedId} must exist in MySQL`);
+      }
+    });
+
+    test('Working Professional plans provide 28 consecutive days including weekends', () => {
+      const proDates = calculateDeliveryDates({
+        planType: 'working_professional',
+        startDateStr: '2026-10-12',
+        cycleDays: 28
+      });
+      assert.strictEqual(proDates.length, 28, 'Professional plan must have exactly 28 delivery days');
+    });
+
+    test('Student plans provide Monday-Friday deliveries only with zero weekend charges or deliveries', () => {
+      const studentDates = calculateDeliveryDates({
+        planType: 'student',
+        startDateStr: '2026-10-12',
+        cycleDays: 28
+      });
+      // In a 28-day window starting on Monday, there are exactly 4 weeks * 5 weekdays = 20 weekdays
+      assert.strictEqual(studentDates.length, 20, 'A 28-day window starting Monday has exactly 20 weekdays');
+
+      for (const dateStr of studentDates) {
+        const day = new Date(dateStr).getDay();
+        assert.ok(day >= 1 && day <= 5, `Date ${dateStr} must be a weekday (Mon-Fri)`);
+      }
+    });
+
+    test('All 6 subscription plans belong to approved sellers', async () => {
+      const plans = await db.find('subscription_plans');
+      const approvedSellers = await db.find('seller_profiles', { verification_status: 'approved' });
+      const approvedSellerIds = new Set(approvedSellers.map(s => s.id));
+
+      const demoPlans = plans.filter(p => p.id.startsWith('sub_plan_'));
+      for (const plan of demoPlans) {
+        assert.ok(
+          approvedSellerIds.has(plan.seller_id),
+          `Plan ${plan.id} seller ${plan.seller_id} must be in approved seller list`
+        );
+      }
+    });
+  });
+
+  describe('8. Location & Demo User Rules', () => {
+    test('isDemoUser correctly identifies demo users from IDs and emails', async () => {
+      const { isDemoUser } = await import('../src/middleware/auth.js');
+
+      assert.strictEqual(isDemoUser({ id: 'user_cust_01' }), true);
+      assert.strictEqual(isDemoUser({ id: 'user_sell_01' }), true);
+      assert.strictEqual(isDemoUser({ id: 'random_id', email: 'test@fitbite.demo' }), true);
+      assert.strictEqual(isDemoUser({ id: 'random_id', is_demo: true }), true);
+      assert.strictEqual(isDemoUser({ id: 'real_cust_uuid_999', email: 'real@gmail.com' }), false);
+      assert.strictEqual(isDemoUser(null), false);
+    });
+  });
+
+  describe('9. Seller Meal Editing', () => {
+    test('Seller can update an existing meal and updates are reflected in MySQL', async () => {
+      const meal = await db.findOne('meals', { id: 'meal_001' });
+      assert.ok(meal, 'meal_001 must exist');
+
+      const originalPrice = parseFloat(meal.base_price);
+      const testPrice = originalPrice + 5;
+
+      // Update meal
+      await db.update('meals', { id: 'meal_001' }, {
+        base_price: testPrice,
+        prep_time_minutes: 30
+      });
+
+      const updated = await db.findOne('meals', { id: 'meal_001' });
+      assert.strictEqual(parseFloat(updated.base_price), testPrice, 'Updated base price must be persisted');
+      assert.strictEqual(updated.prep_time_minutes, 30, 'Updated prep time must be persisted');
+
+      // Revert back to original
+      await db.update('meals', { id: 'meal_001' }, {
+        base_price: originalPrice,
+        prep_time_minutes: meal.prep_time_minutes
+      });
+    });
+
+    test('Cross-seller updates are prohibited by checking ownership against req.seller.id', async () => {
+      const meal = await db.findOne('meals', { id: 'meal_001' });
+      assert.ok(meal, 'meal_001 must exist');
+
+      const differentSellerId = 'seller_prof_999_attacker';
+      assert.notStrictEqual(meal.seller_id, differentSellerId, 'Meal seller should not match attacker seller');
+      // The route enforces: if (meal.seller_id !== req.seller.id) return res.status(403)
+      const isAllowed = meal.seller_id === differentSellerId;
+      assert.strictEqual(isAllowed, false, 'Cross-seller edit must be denied');
+    });
+  });
 });

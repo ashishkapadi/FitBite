@@ -26,7 +26,9 @@ import {
   Sun,
   Moon,
   Save,
-  Store
+  Store,
+  Edit2,
+  Loader2
 } from 'lucide-react';
 
 export default function SellerDashboardPage() {
@@ -47,6 +49,13 @@ export default function SellerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState('');
+
+  // Edit Meal State
+  const [showEditMealModal, setShowEditMealModal] = useState(false);
+  const [editingMeal, setEditingMeal] = useState(null);
+  const [isEditDirty, setIsEditDirty] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   // Modals
   const [showAddMealModal, setShowAddMealModal] = useState(false);
@@ -181,6 +190,117 @@ export default function SellerDashboardPage() {
       if (res.ok) fetchMeals();
     } catch (err) {
       alert('Error updating dish availability.');
+    }
+  };
+
+  // Open Edit Dish Modal with prefilled values
+  const handleOpenEditMeal = (meal) => {
+    setEditingMeal({
+      id: meal.id,
+      name: meal.name,
+      category_id: meal.category_id || 'cat_north_indian',
+      cuisine: meal.cuisine || 'North Indian',
+      base_price: meal.base_price,
+      description: meal.description || '',
+      portion_choices: Array.isArray(meal.portion_choices) ? meal.portion_choices.join(', ') : (typeof meal.portion_choices === 'string' ? meal.portion_choices : 'Standard Portion'),
+      ingredients: Array.isArray(meal.ingredients) ? meal.ingredients.join(', ') : '',
+      allergens: Array.isArray(meal.allergens) ? meal.allergens.join(', ') : '',
+      dietary_tags: Array.isArray(meal.dietary_tags) ? meal.dietary_tags.join(', ') : 'Vegetarian',
+      prep_time_minutes: meal.prep_time_minutes || 25,
+      calories: meal.calories ?? '',
+      protein_grams: meal.protein_grams ?? '',
+      carbs_grams: meal.carbs_grams ?? '',
+      fat_grams: meal.fat_grams ?? '',
+      image_url: meal.image_url || '',
+      is_available: Boolean(meal.is_available),
+      is_tiffin_eligible: Boolean(meal.is_tiffin_eligible),
+      updated_at: meal.updated_at
+    });
+    setIsEditDirty(false);
+    setEditError('');
+    setShowEditMealModal(true);
+  };
+
+  // Close Edit Dish Modal with unsaved changes verification
+  const handleCloseEditMeal = () => {
+    if (isEditDirty) {
+      if (!window.confirm('You have unsaved changes in this dish. Discard changes without saving?')) {
+        return;
+      }
+    }
+    setShowEditMealModal(false);
+    setEditingMeal(null);
+    setIsEditDirty(false);
+    setEditError('');
+  };
+
+  // Save Dish Changes
+  const handleSaveEditMeal = async (e) => {
+    e.preventDefault();
+    if (!editingMeal) return;
+
+    if (!editingMeal.name || !editingMeal.name.trim()) {
+      setEditError('Dish name is required.');
+      return;
+    }
+    const priceNum = parseFloat(editingMeal.base_price);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      setEditError('Base price must be a valid positive amount in ₹.');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError('');
+
+    try {
+      const payload = {
+        name: editingMeal.name.trim(),
+        description: editingMeal.description.trim(),
+        category_id: editingMeal.category_id,
+        cuisine: editingMeal.cuisine.trim(),
+        base_price: priceNum,
+        portion_choices: typeof editingMeal.portion_choices === 'string'
+          ? editingMeal.portion_choices.split(',').map(s => s.trim()).filter(Boolean)
+          : editingMeal.portion_choices,
+        ingredients: typeof editingMeal.ingredients === 'string'
+          ? editingMeal.ingredients.split(',').map(s => s.trim()).filter(Boolean)
+          : editingMeal.ingredients,
+        allergens: typeof editingMeal.allergens === 'string'
+          ? editingMeal.allergens.split(',').map(s => s.trim()).filter(Boolean)
+          : editingMeal.allergens,
+        dietary_tags: typeof editingMeal.dietary_tags === 'string'
+          ? editingMeal.dietary_tags.split(',').map(s => s.trim()).filter(Boolean)
+          : editingMeal.dietary_tags,
+        prep_time_minutes: parseInt(editingMeal.prep_time_minutes, 10) || 25,
+        calories: editingMeal.calories ? parseInt(editingMeal.calories, 10) : null,
+        protein_grams: editingMeal.protein_grams ? parseFloat(editingMeal.protein_grams) : null,
+        carbs_grams: editingMeal.carbs_grams ? parseFloat(editingMeal.carbs_grams) : null,
+        fat_grams: editingMeal.fat_grams ? parseFloat(editingMeal.fat_grams) : null,
+        image_url: editingMeal.image_url ? editingMeal.image_url.trim() : null,
+        is_available: Boolean(editingMeal.is_available),
+        is_tiffin_eligible: Boolean(editingMeal.is_tiffin_eligible),
+        client_last_updated: editingMeal.updated_at
+      };
+
+      const res = await apiFetch(`/api/seller/meals/${editingMeal.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update meal.');
+      }
+
+      setMeals(prev => prev.map(m => m.id === editingMeal.id ? data.meal : m));
+      setShowEditMealModal(false);
+      setEditingMeal(null);
+      setIsEditDirty(false);
+      alert(`"${data.meal.name}" saved successfully to your kitchen menu!`);
+    } catch (err) {
+      setEditError(err.message || 'Error updating meal');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -633,18 +753,28 @@ export default function SellerDashboardPage() {
                       {meal.description}
                     </p>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
                       <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
                         ₹{meal.base_price}
                       </span>
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        onClick={() => handleToggleMealAvailability(meal)}
-                        style={{ fontSize: '0.8rem' }}
-                      >
-                        {meal.is_available ? 'Mark Out of Stock' : 'Enable in Menu'}
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => handleOpenEditMeal(meal)}
+                          style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', borderColor: '#CBD5E1', color: '#1E293B' }}
+                        >
+                          <Edit2 size={13} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => handleToggleMealAvailability(meal)}
+                          style={{ fontSize: '0.8rem' }}
+                        >
+                          {meal.is_available ? 'Mark Out of Stock' : 'Enable in Menu'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1090,6 +1220,341 @@ export default function SellerDashboardPage() {
               <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
                 Create Tiffin Plan
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Dish Modal */}
+      {showEditMealModal && editingMeal && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="modal-dialog" style={{ maxWidth: '640px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 2px', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Edit2 size={18} color="#0D9488" /> Edit Dish: {editingMeal.name}
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                  Meal ID: <code>{editingMeal.id}</code> (Preserves order history &amp; tiffin references)
+                </span>
+              </div>
+              <button 
+                type="button" 
+                onClick={handleCloseEditMeal} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditMeal} style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {editError && (
+                <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#B91C1C', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertCircle size={16} />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                  Dish Name *
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  required
+                  value={editingMeal.name}
+                  onChange={(e) => {
+                    setEditingMeal({ ...editingMeal, name: e.target.value });
+                    setIsEditDirty(true);
+                  }}
+                  placeholder="e.g. Kolhapuri Paneer Thali"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                    Base Price (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    className="form-input"
+                    required
+                    value={editingMeal.base_price}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, base_price: e.target.value });
+                      setIsEditDirty(true);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                    Prep Time (Minutes)
+                  </label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={editingMeal.prep_time_minutes}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, prep_time_minutes: e.target.value });
+                      setIsEditDirty(true);
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                    Cuisine
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editingMeal.cuisine}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, cuisine: e.target.value });
+                      setIsEditDirty(true);
+                    }}
+                    placeholder="e.g. North Indian, South Indian"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                    Category
+                  </label>
+                  <select
+                    className="form-input"
+                    value={editingMeal.category_id}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, category_id: e.target.value });
+                      setIsEditDirty(true);
+                    }}
+                  >
+                    <option value="cat_north_indian">North Indian</option>
+                    <option value="cat_south_indian">South Indian</option>
+                    <option value="cat_healthy_bowls">Healthy Bowls</option>
+                    <option value="cat_high_protein">High Protein</option>
+                    <option value="cat_tiffin_combos">Tiffin Combos</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                  Image URL
+                </label>
+                <input
+                  type="url"
+                  className="form-input"
+                  value={editingMeal.image_url}
+                  onChange={(e) => {
+                    setEditingMeal({ ...editingMeal, image_url: e.target.value });
+                    setIsEditDirty(true);
+                  }}
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                  Description
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={editingMeal.description}
+                  onChange={(e) => {
+                    setEditingMeal({ ...editingMeal, description: e.target.value });
+                    setIsEditDirty(true);
+                  }}
+                  placeholder="Fresh homestyle ingredients, slow cooked..."
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                  Portion Choices (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editingMeal.portion_choices}
+                  onChange={(e) => {
+                    setEditingMeal({ ...editingMeal, portion_choices: e.target.value });
+                    setIsEditDirty(true);
+                  }}
+                  placeholder="Standard Portion, Mini Thali, Large Thali"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                    Dietary Tags (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editingMeal.dietary_tags}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, dietary_tags: e.target.value });
+                      setIsEditDirty(true);
+                    }}
+                    placeholder="Vegetarian, High-Protein, Jain"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                    Allergens (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editingMeal.allergens}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, allergens: e.target.value });
+                      setIsEditDirty(true);
+                    }}
+                    placeholder="Dairy, Gluten, Nuts"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.25rem', color: '#1E293B' }}>
+                  Key Ingredients (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editingMeal.ingredients}
+                  onChange={(e) => {
+                    setEditingMeal({ ...editingMeal, ingredients: e.target.value });
+                    setIsEditDirty(true);
+                  }}
+                  placeholder="Paneer, Tomatoes, Fresh Herbs, Spices"
+                />
+              </div>
+
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+                  Nutrition Facts (optional)
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#64748B' }}>Calories</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ padding: '6px 8px', fontSize: '0.85rem' }}
+                      value={editingMeal.calories}
+                      onChange={(e) => {
+                        setEditingMeal({ ...editingMeal, calories: e.target.value });
+                        setIsEditDirty(true);
+                      }}
+                      placeholder="kcal"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#64748B' }}>Protein (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="form-input"
+                      style={{ padding: '6px 8px', fontSize: '0.85rem' }}
+                      value={editingMeal.protein_grams}
+                      onChange={(e) => {
+                        setEditingMeal({ ...editingMeal, protein_grams: e.target.value });
+                        setIsEditDirty(true);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#64748B' }}>Carbs (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="form-input"
+                      style={{ padding: '6px 8px', fontSize: '0.85rem' }}
+                      value={editingMeal.carbs_grams}
+                      onChange={(e) => {
+                        setEditingMeal({ ...editingMeal, carbs_grams: e.target.value });
+                        setIsEditDirty(true);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#64748B' }}>Fat (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="form-input"
+                      style={{ padding: '6px 8px', fontSize: '0.85rem' }}
+                      value={editingMeal.fat_grams}
+                      onChange={(e) => {
+                        setEditingMeal({ ...editingMeal, fat_grams: e.target.value });
+                        setIsEditDirty(true);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '24px', alignItems: 'center', marginTop: '4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={editingMeal.is_available}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, is_available: e.target.checked });
+                      setIsEditDirty(true);
+                    }}
+                  />
+                  <span>In Stock (Available for ordering)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem', fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={editingMeal.is_tiffin_eligible}
+                    onChange={(e) => {
+                      setEditingMeal({ ...editingMeal, is_tiffin_eligible: e.target.checked });
+                      setIsEditDirty(true);
+                    }}
+                  />
+                  <span>Tiffin Eligible</span>
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '1rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleCloseEditMeal}
+                  disabled={editSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={editSaving}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {editSaving ? (
+                    <>
+                      <Loader2 size={16} className="spin" /> Saving Changes...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} /> Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         </div>

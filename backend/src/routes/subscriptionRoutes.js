@@ -13,28 +13,28 @@ function getNowInKolkata() {
 }
 
 // Calculate eligible delivery dates based on plan type
+// Calculate eligible delivery dates based on plan type
 export function calculateDeliveryDates({ planType, startDateStr, cycleDays = 28 }) {
   const dates = [];
   const start = new Date(startDateStr);
+  const windowDays = parseInt(cycleDays, 10) || 28;
 
   if (planType === 'student') {
-    // Deliveries Mon-Fri only, calculate eligible weekdays over a 1-month window (e.g. 30 days)
+    // Student: Deliveries Monday to Friday only.
+    // Dynamically counts eligible weekdays over the subscription window (28 calendar days / 4 weeks).
+    // Saturdays and Sundays are strictly excluded with zero billing and zero deliveries.
     let current = new Date(start);
-    let count = 0;
-    const windowDays = 30;
-
     for (let i = 0; i < windowDays; i++) {
       const dayOfWeek = current.getDay(); // 0 is Sun, 6 is Sat
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
         dates.push(current.toISOString().split('T')[0]);
-        count++;
       }
       current.setDate(current.getDate() + 1);
     }
   } else {
-    // Working professional: exactly cycleDays consecutive calendar days (including weekends)
+    // Working professional: exactly windowDays consecutive calendar days (including weekends)
     let current = new Date(start);
-    for (let i = 0; i < cycleDays; i++) {
+    for (let i = 0; i < windowDays; i++) {
       dates.push(current.toISOString().split('T')[0]);
       current.setDate(current.getDate() + 1);
     }
@@ -83,11 +83,16 @@ router.get('/plans', async (req, res) => {
     const allPlans = await db.find('subscription_plans');
     const enriched = [];
 
+    // Use tomorrow in IST as reference start date for dynamic previews
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
     for (const plan of allPlans) {
       if (!Boolean(plan.is_active)) continue;
 
       const seller = await db.findOne('seller_profiles', { id: plan.seller_id });
-      // Only include plans from verified and active sellers
+      // Only include plans from verified and active sellers (exclude pending sellers like seller_pending)
       if (!seller || seller.verification_status !== 'approved' || seller.is_listed === false) {
         continue;
       }
@@ -119,6 +124,13 @@ router.get('/plans', async (req, res) => {
       const discountPercent = parseFloat(plan.plan_discount_percent || 0);
       const discountedPrice = Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100;
 
+      // Dynamically calculate delivery dates and exact weekday count
+      const previewDates = calculateDeliveryDates({
+        planType: plan.plan_type,
+        startDateStr: tomorrowStr,
+        cycleDays: plan.cycle_days || 28
+      });
+
       // Rotating menu preview from daily_tiffin_menus or seller meals
       const dailyMenus = await db.find('daily_tiffin_menus', m => m.seller_id === seller.id);
       let menuPreview = [];
@@ -145,30 +157,53 @@ router.get('/plans', async (req, res) => {
         }));
       }
 
+      // Determine dietary type and portion info based on plan name and kitchen
+      const isHighProtein = plan.name.toLowerCase().includes('high-protein');
+      const isVeg = !isHighProtein || plan.name.toLowerCase().includes('veg');
+      const dietaryType = isHighProtein ? 'High-Protein Fitness' : 'Pure Homestyle Vegetarian';
+      const portionInfo = plan.plan_type === 'working_professional'
+        ? (isHighProtein ? '30g+ protein portion: 200g paneer/tofu/chicken breast + quinoa/brown rice + lentil bowl + greens' : 'Hearty Executive Thali: 4 Phulkas, Basmati Rice, Dal Tadka, 2 Seasonal Subzis, Salad')
+        : (isHighProtein ? 'Student High-Protein Bowl: Soya/paneer/egg mash, steamed rice/phulka, dal, and sprout salad' : 'Budget Student Thali: 3 Phulkas, Steamed Rice, Dal, Seasonal Subzi, Kachumber');
+
       enriched.push({
         ...plan,
         is_active: true,
         base_price_per_meal: basePrice,
         plan_discount_percent: discountPercent,
         per_meal_cost: discountedPrice,
+        price_per_delivery: discountedPrice,
+        delivery_days_count: previewDates.length,
+        total_meal_deliveries: previewDates.length * (supportedSlots.includes('both') && supportedSlots[0] === 'both' ? 2 : 1),
         supported_slots: supportedSlots,
+        dietary_type: dietaryType,
+        portion_info: portionInfo,
         kitchen_name: seller.business_name,
         seller: {
           id: seller.id,
           business_name: seller.business_name,
           area: seller.area,
           rating: seller.rating,
+          rating_count: seller.rating_count,
           preparation_cutoff_lunch_time: seller.preparation_cutoff_lunch_time || '08:30:00',
           preparation_cutoff_dinner_time: seller.preparation_cutoff_dinner_time || '16:00:00'
         },
         sample_meals: sampleMeals,
         menu_preview: menuPreview,
+        customization_options: [
+          'Low Spice / Medium / Spicy',
+          'All-Phulka (No Rice) or Extra Rice Swap',
+          'Zero Onion & Garlic option upon request',
+          'Eco-friendly Steel Dabba swap (₹0 waste)'
+        ],
+        skip_cutoff: `Lunch: ${seller.preparation_cutoff_lunch_time || '08:30 AM'} IST | Dinner: ${seller.preparation_cutoff_dinner_time || '04:00 PM'} IST`,
         skip_policy: plan.plan_type === 'working_professional'
-          ? 'Up to 2 skip days per 28-day cycle with morning cutoff notice. Each skipped day extends your subscription end date by 1 full day.'
-          : 'Weekends (Saturday & Sunday) are automatically excluded from billing. 1 emergency skip permitted per monthly cycle.',
+          ? 'Up to 2 skip days per 28-day cycle with cutoff notice. Each skipped delivery automatically extends your plan end date by 1 day with zero wasted meals.'
+          : 'Monday–Friday deliveries only. Weekends are completely excluded from billing. 1 emergency skip day permitted per monthly term.',
+        credit_policy: 'Skipped deliveries are fully credited and extend your subscription cycle by 1 calendar delivery day.',
+        cancellation_policy: 'Flexible cancellation anytime. Unused deliveries are fully refunded with zero hidden exit penalties.',
         schedule_details: plan.plan_type === 'working_professional'
-          ? '28 consecutive calendar days including weekends.'
-          : 'Monday to Friday deliveries only. Billable days are calculated for eligible college weekdays.'
+          ? '28 consecutive calendar days, including Saturdays & Sundays.'
+          : `Monday to Friday deliveries only (${previewDates.length} billable college weekdays). Weekends strictly excluded from charges.`
       });
     }
 

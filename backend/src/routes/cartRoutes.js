@@ -253,32 +253,7 @@ router.put('/items/:id', requireAuth, async (req, res) => {
   }
 });
 
-// 4. Delete item from cart
-router.delete('/items/:id', requireAuth, async (req, res) => {
-  try {
-    const user = req.user;
-    const cart = await getOrCreateCart(user.id);
-
-    await db.withTransaction(async (trx) => {
-      await trx.delete('cart_items', { id: req.params.id, cart_id: cart.id });
-      const remaining = await trx.find('cart_items', { cart_id: cart.id });
-      if (remaining.length === 0) {
-        await trx.update('carts', { id: cart.id }, { seller_id: null });
-      }
-    });
-
-    res.json({ message: 'Item removed from cart.' });
-  } catch (err) {
-    console.error('[Cart Error] Delete cart item failed:', {
-      error: err.message,
-      code: err.code,
-      itemId: req.params?.id
-    });
-    res.status(500).json({ error: 'Server error deleting cart item.' });
-  }
-});
-
-// 5. Clear entire cart
+// 4. Clear entire cart
 router.delete(['/', '/clear'], requireAuth, async (req, res) => {
   try {
     const user = req.user;
@@ -294,9 +269,69 @@ router.delete(['/', '/clear'], requireAuth, async (req, res) => {
     console.error('[Cart Error] Clear cart failed:', {
       error: err.message,
       code: err.code,
-      userId: user.id
+      userId: req.user?.id
     });
     res.status(500).json({ error: 'Server error clearing cart.' });
+  }
+});
+
+// 5. Delete item from cart (Verified customer ownership and variant safety)
+router.delete(['/items/:id', '/:id'], requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const cart = await getOrCreateCart(user.id);
+    const paramId = req.params.id;
+
+    // 1. First look up by primary cart_item ID belonging to this user's cart
+    let targetItem = await db.findOne('cart_items', { id: paramId, cart_id: cart.id });
+
+    // 2. Fallback: If caller sent meal_id, look up items matching this meal in the cart
+    if (!targetItem) {
+      const matchingMealItems = await db.find('cart_items', { meal_id: paramId, cart_id: cart.id });
+      if (matchingMealItems.length === 1) {
+        // Unambiguous single variant for this meal
+        targetItem = matchingMealItems[0];
+      } else if (matchingMealItems.length > 1) {
+        // Multiple customized variants exist! Do not delete all; require the specific cart item ID
+        return res.status(400).json({
+          error: 'Multiple variants of this meal exist in your cart. Please specify the exact variant ID to remove.'
+        });
+      }
+    }
+
+    if (!targetItem) {
+      return res.status(404).json({ error: 'Cart item not found in your active cart.' });
+    }
+
+    // 3. Atomically remove ONLY this specific cart_item variant
+    const deleteResult = await db.withTransaction(async (trx) => {
+      await trx.delete('cart_items', { id: targetItem.id, cart_id: cart.id });
+      const remaining = await trx.find('cart_items', { cart_id: cart.id });
+      if (remaining.length === 0) {
+        await trx.update('carts', { id: cart.id }, { seller_id: null });
+      }
+      const remainingSubtotal = remaining.reduce((sum, item) => sum + parseFloat(item.total_price || (item.item_price * item.quantity)), 0);
+      return {
+        remainingCount: remaining.reduce((sum, item) => sum + item.quantity, 0),
+        remainingSubtotal: Math.round(remainingSubtotal * 100) / 100
+      };
+    });
+
+    res.json({
+      message: 'Item removed from cart.',
+      removed_id: targetItem.id,
+      meal_id: targetItem.meal_id,
+      item_count: deleteResult.remainingCount,
+      subtotal: deleteResult.remainingSubtotal
+    });
+  } catch (err) {
+    console.error('[Cart Error] Delete cart item failed:', {
+      error: err.message,
+      code: err.code,
+      itemId: req.params?.id,
+      userId: req.user?.id
+    });
+    res.status(500).json({ error: 'Server error deleting cart item.' });
   }
 });
 

@@ -17,6 +17,8 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import LocationModal from './LocationModal';
+import { apiFetch, safeJson } from '../../config/api';
 
 export function Navbar() {
   const { user, sellerProfile, openAuthModal, logout } = useAuth();
@@ -25,20 +27,59 @@ export function Navbar() {
   const location = useLocation();
   const isSellerRoute = location.pathname.startsWith('/seller');
 
-  const [selectedLocation, setSelectedLocation] = useState('Indiranagar, Bengaluru');
+  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const locations = [
-    'Indiranagar, Bengaluru',
-    'Koramangala, Bengaluru',
-    'HSR Layout, Bengaluru',
-    'BTM Layout, Bengaluru',
-    'Whitefield, Bengaluru',
-    'Bellandur, Bengaluru',
-    'Jayanagar, Bengaluru'
-  ];
+  // Synchronize customer location based on authentication state
+  useEffect(() => {
+    if (!user) {
+      setSelectedAddress(null);
+      localStorage.removeItem('fitbite_active_address_id');
+      return;
+    }
+
+    // Demo accounts must never display or prefill shared addresses
+    if (user.is_demo) {
+      setSelectedAddress(null);
+      return;
+    }
+
+    // Real customer account: load saved addresses
+    const loadCustomerAddresses = async () => {
+      try {
+        const res = await apiFetch('/api/users/addresses');
+        if (res.ok) {
+          const list = await safeJson(res);
+          if (Array.isArray(list) && list.length > 0) {
+            const savedId = localStorage.getItem('fitbite_active_address_id');
+            const found = list.find(a => a.id === savedId) || list.find(a => a.is_default) || list[0];
+            setSelectedAddress(found);
+          } else {
+            setSelectedAddress(null);
+          }
+        }
+      } catch (err) {
+        console.error('[Navbar] Error loading customer location:', err);
+      }
+    };
+
+    loadCustomerAddresses();
+  }, [user]);
+
+  const handleSelectAddress = (addr) => {
+    setSelectedAddress(addr);
+    if (addr?.id) {
+      localStorage.setItem('fitbite_active_address_id', addr.id);
+    }
+  };
+
+  // Determine short header label
+  const locationLabel = (user && !user.is_demo && selectedAddress)
+    ? (selectedAddress.area || selectedAddress.city || 'Delivery Location')
+    : 'Add your location';
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -203,27 +244,33 @@ export function Navbar() {
           </div>
         </Link>
 
-        {/* Location Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontSize: '0.88rem', fontWeight: 500 }} className="hide-mobile">
-          <MapPin size={18} color="#10B981" />
-          <select
-            value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              fontWeight: 600,
-              color: '#0F172A',
-              cursor: 'pointer',
-              outline: 'none',
-              fontSize: '0.88rem'
-            }}
-          >
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-        </div>
+        {/* Dynamic Location Button */}
+        <button
+          type="button"
+          onClick={() => setIsLocationModalOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '7px',
+            color: '#1E293B',
+            fontSize: '0.86rem',
+            fontWeight: 600,
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '9999px',
+            padding: '6px 14px',
+            cursor: 'pointer',
+            transition: 'all 150ms'
+          }}
+          className="hide-mobile"
+          title="Change or set delivery location"
+        >
+          <MapPin size={16} color="#10B981" />
+          <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {locationLabel}
+          </span>
+          <ChevronDown size={14} color="#64748B" />
+        </button>
 
         {/* Search Bar */}
         <form onSubmit={handleSearchSubmit} style={{ flex: 1, maxWidth: '340px' }} className="hide-mobile">
@@ -464,6 +511,30 @@ export function Navbar() {
             />
           </form>
 
+          <button
+            type="button"
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              setIsLocationModalOpen(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 0',
+              border: 'none',
+              background: 'none',
+              fontSize: '0.92rem',
+              fontWeight: 600,
+              color: '#0F172A',
+              cursor: 'pointer',
+              borderBottom: '1px solid #F1F5F9'
+            }}
+          >
+            <MapPin size={18} color="#10B981" />
+            <span>{locationLabel}</span>
+          </button>
+
           <Link to="/explore" onClick={() => setIsMobileMenuOpen(false)} style={{ fontWeight: 600, padding: '8px 0', color: '#334155' }}>
             Explore Meals
           </Link>
@@ -478,6 +549,14 @@ export function Navbar() {
           </Link>
         </div>
       )}
+
+      {/* Location Modal */}
+      <LocationModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        selectedAddress={selectedAddress}
+        onSelectAddress={handleSelectAddress}
+      />
 
       {/* Responsive media query styling */}
       <style>{`

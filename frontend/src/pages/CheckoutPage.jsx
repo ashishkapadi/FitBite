@@ -17,12 +17,13 @@ import {
   ArrowRight,
   AlertCircle,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 
 export default function CheckoutPage() {
   const { user, token, openAuthModal } = useAuth();
-  const { cart, removeFromCart, updateQuantity, clearCart } = useCart();
+  const { cart, removeFromCart, updateQuantity, clearCart, isItemRemoving, removalError } = useCart();
   const navigate = useNavigate();
 
   // Address State
@@ -31,8 +32,8 @@ export default function CheckoutPage() {
   const [showNewAddressForm, setShowNewAddressForm] = useState(false);
   const [newAddress, setNewAddress] = useState({
     address_line1: '',
-    city: 'Mumbai',
-    pincode: '400050',
+    city: '',
+    pincode: '',
     address_type: 'Home'
   });
 
@@ -503,41 +504,62 @@ export default function CheckoutPage() {
               )}
             </div>
 
+            {removalError && (
+              <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', marginBottom: '0.75rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertCircle size={15} />
+                <span>{removalError}</span>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem' }}>
-              {cart.items.map((item) => (
-                <div key={item.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6' }}>
-                  <div style={{ width: '56px', height: '56px', borderRadius: '0.5rem', overflow: 'hidden', flexShrink: 0 }}>
-                    <ImageWithFallback src={item.meal?.image_url} alt={item.meal?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.15rem', color: '#111827' }}>
-                      {item.meal?.name || 'Custom Meal'}
-                    </h4>
-                    <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                      ₹{item.item_price} each • {item.portion_selected || 'Standard'}
+              {cart.items.map((item) => {
+                const removing = isItemRemoving ? isItemRemoving(item.id) : false;
+                return (
+                  <div key={item.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6', opacity: removing ? 0.5 : 1, transition: 'opacity 150ms' }}>
+                    <div style={{ width: '56px', height: '56px', borderRadius: '0.5rem', overflow: 'hidden', flexShrink: 0 }}>
+                      <ImageWithFallback src={item.meal?.image_url} alt={item.meal?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
-                    {item.customizations && (
-                      <div style={{ fontSize: '0.7rem', color: '#059669', marginTop: '0.15rem' }}>
-                        Base: {item.customizations.base || 'Standard'} • Spice: {item.customizations.spice || 'Medium'}
-                      </div>
-                    )}
-                  </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111827' }}>
-                      x{item.quantity}
-                    </span>
-                    <button 
-                      onClick={() => removeFromCart(item.id)}
-                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px' }}
-                      title="Remove"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.15rem', color: '#111827' }}>
+                        {item.meal?.name || 'Custom Meal'}
+                      </h4>
+                      <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                        ₹{item.item_price} each • {item.portion_selected || 'Standard'}
+                      </div>
+                      {item.customizations && (
+                        <div style={{ fontSize: '0.7rem', color: '#059669', marginTop: '0.15rem' }}>
+                          Base: {item.customizations.base || 'Standard'} • Spice: {item.customizations.spice || 'Medium'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111827' }}>
+                        x{item.quantity}
+                      </span>
+                      <button 
+                        type="button"
+                        disabled={removing}
+                        onClick={() => removeFromCart(item.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: removing ? '#9CA3AF' : '#EF4444',
+                          cursor: removing ? 'not-allowed' : 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title={removing ? "Removing..." : "Remove"}
+                      >
+                        {removing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Coupon Code Input */}

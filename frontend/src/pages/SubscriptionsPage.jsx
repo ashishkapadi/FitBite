@@ -184,25 +184,26 @@ export default function SubscriptionsPage() {
 
     if (!addressIdToUse) {
       if (!newAddressText.trim()) {
-        alert('Please enter or select a delivery address.');
+        alert('Please enter or select a serviceable delivery address before activating subscription.');
         return;
       }
       try {
         const addRes = await apiFetch('/api/users/addresses', {
           method: 'POST',
           body: JSON.stringify({
-            address_line1: newAddressText,
-            city: 'Mumbai',
-            pincode: '400050',
-            address_type: 'Home'
+            street_address: newAddressText.trim(),
+            area: selectedPlan?.seller?.area || 'Delivery Locality',
+            city: 'Bengaluru',
+            pincode: '560038',
+            label: 'Home'
           })
         });
         const addData = await safeJson(addRes);
-        if (addData.id) {
-          addressIdToUse = addData.id;
+        if (addData.address?.id || addData.id) {
+          addressIdToUse = addData.address?.id || addData.id;
         }
       } catch (err) {
-        alert('Could not save address.');
+        alert('Could not save address: ' + (err.message || 'Error'));
         return;
       }
     }
@@ -380,6 +381,9 @@ export default function SubscriptionsPage() {
                         <span>Kitchen: <b>{p.kitchen_name || p.seller?.business_name || 'Verified Kitchen'}</b></span>
                         <span style={{ color: '#F59E0B', fontWeight: 700 }}>★ {p.seller?.rating || '4.9'}</span>
                       </div>
+                      <div style={{ fontSize: '0.78rem', color: '#059669', marginTop: '0.35rem', fontWeight: 600 }}>
+                        {p.dietary_type || 'Pure Vegetarian'} • {p.portion_info || 'Homestyle Portion'}
+                      </div>
                     </div>
 
                     {/* Highlights */}
@@ -388,7 +392,7 @@ export default function SubscriptionsPage() {
                         <CheckCircle size={16} color="#10B981" style={{ marginTop: '2px', flexShrink: 0 }} />
                         <span>
                           {isStudent
-                            ? 'Deliveries Mon–Fri only (Weekends auto-excluded from billing)'
+                            ? 'Deliveries Mon–Fri only (Weekends strictly excluded from charges)'
                             : '28 consecutive calendar days daily cycle (includes weekends)'}
                         </span>
                       </li>
@@ -406,13 +410,29 @@ export default function SubscriptionsPage() {
                       </li>
                       <li style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                         <CheckCircle size={16} color="#10B981" style={{ marginTop: '2px', flexShrink: 0 }} />
-                        <span>Free doorstep delivery with stainless steel dabba option</span>
+                        <span>Cutoff notice: {p.skip_cutoff || '08:30 AM IST (Lunch) / 04:00 PM IST (Dinner)'}</span>
                       </li>
                     </ul>
 
+                    {/* Customization Options Badges */}
+                    {p.customization_options && p.customization_options.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.35rem' }}>
+                          Customization Supported:
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {p.customization_options.slice(0, 3).map((opt, oIdx) => (
+                            <span key={oIdx} style={{ fontSize: '0.7rem', background: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
+                              {opt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Sample Kitchen Dishes Preview */}
                     {p.sample_meals && p.sample_meals.length > 0 && (
-                      <div style={{ marginTop: '1rem', borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem' }}>
+                      <div style={{ marginTop: '0.5rem', borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem' }}>
                         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                           Sample Dishes from {p.kitchen_name || 'Kitchen'}:
                         </div>
@@ -525,7 +545,7 @@ export default function SubscriptionsPage() {
                     />
                   )}
                   <div style={{ fontSize: '0.8rem', color: '#059669', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <ShieldCheck size={14} /> Serviceable in Bandra, Andheri, BKC & Powai
+                    <ShieldCheck size={14} /> Serviceable in {selectedPlan?.seller?.area || 'Indiranagar & Bengaluru mess routes'}
                   </div>
                 </div>
               </div>

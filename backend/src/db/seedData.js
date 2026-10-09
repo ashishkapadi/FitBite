@@ -507,88 +507,94 @@ export const SEED_CUSTOMIZATION_OPTIONS = [
 ];
 
 export const SEED_SUBSCRIPTION_PLANS = [
+  // 1. Working Professional: Everyday Veg — 28-Day Plan
   {
     id: 'sub_plan_01',
     seller_id: 'seller_01',
     plan_type: 'working_professional',
-    name: 'Working Professional 28-Day Homestyle Cycle',
-    description: 'Daily fresh meals 7 days a week, including weekends. Allows up to 2 flexible skip-days that seamlessly extend your plan end date.',
+    name: 'Everyday Veg — 28-Day Plan',
+    description: 'Daily fresh homestyle vegetarian meals for 28 consecutive calendar days, including weekends. Features rotating thalis with phulkas, dal tadka, seasonal subzi, and fresh salad.',
     cycle_days: 28,
     delivery_frequency: 'daily',
     supported_slots: ['lunch', 'dinner', 'both'],
-    base_price_per_meal: 125.00,
+    base_price_per_meal: 120.00,
     plan_discount_percent: 15.00,
     max_skips_allowed: 2,
     is_active: true
   },
+  // 2. Working Professional: High-Protein — 28-Day Plan
   {
     id: 'sub_plan_02',
-    seller_id: 'seller_01',
-    plan_type: 'student',
-    name: 'Student Pocket Saver Mon-Fri Monthly Plan',
-    description: 'Budget-friendly meals delivered Monday to Friday. Saturdays and Sundays are automatically excluded, billing only for scheduled weekdays.',
-    cycle_days: 22, // Dynamically computed for current month
-    delivery_frequency: 'weekdays_only',
-    supported_slots: ['lunch', 'dinner', 'both'],
-    base_price_per_meal: 99.00,
-    plan_discount_percent: 20.00,
-    max_skips_allowed: 1,
-    is_active: true
-  },
-  {
-    id: 'sub_plan_03',
     seller_id: 'seller_05',
     plan_type: 'working_professional',
-    name: 'FitFuel High-Protein Pro 28-Day Cycle',
-    description: 'Chef-crafted high-protein meal plan (30g+ protein per meal) with lean cottage cheese, tofu, grilled chicken, and quinoa.',
+    name: 'High-Protein — 28-Day Plan',
+    description: 'Macro-balanced fitness meal plan delivering 30g+ protein per meal for 28 consecutive calendar days including weekends. Lean paneer, tofu, grilled chicken, sprouted legumes, and quinoa.',
     cycle_days: 28,
     delivery_frequency: 'daily',
     supported_slots: ['lunch', 'dinner', 'both'],
-    base_price_per_meal: 195.00,
+    base_price_per_meal: 190.00,
     plan_discount_percent: 12.00,
     max_skips_allowed: 2,
     is_active: true
   },
+  // 3. Working Professional: Lunch + Dinner — 28-Day Plan
   {
-    id: 'sub_plan_04',
-    seller_id: 'seller_04',
-    plan_type: 'student',
-    name: 'Dakshin Student Express Mon-Fri Monthly Thali',
-    description: 'Authentic South Indian student plan with freshly steamed sambar rice, rasam, curd rice, and seasonal kootu. Mon–Fri deliveries only (weekends excluded).',
-    cycle_days: 22,
-    delivery_frequency: 'weekdays_only',
-    supported_slots: ['lunch', 'dinner', 'both'],
-    base_price_per_meal: 89.00,
-    plan_discount_percent: 25.00,
-    max_skips_allowed: 1,
-    is_active: true
-  },
-  {
-    id: 'sub_plan_05',
-    seller_id: 'seller_04',
+    id: 'sub_plan_03',
+    seller_id: 'seller_03',
     plan_type: 'working_professional',
-    name: 'Dakshin Corporate 28-Day Homestyle Feast',
-    description: 'Complete 28 consecutive days feast including weekends. Traditional South Indian delicacies prepared with cold-pressed gingelly oil and mild coconut.',
+    name: 'Lunch + Dinner — 28-Day Plan',
+    description: 'All-inclusive 28 consecutive calendar days twin meal routine with both fresh lunch and dinner delivered daily including weekends (56 total meal deliveries for twin slot).',
     cycle_days: 28,
     delivery_frequency: 'daily',
-    supported_slots: ['lunch', 'dinner', 'both'],
-    base_price_per_meal: 119.00,
+    supported_slots: ['both', 'lunch', 'dinner'],
+    base_price_per_meal: 130.00,
     plan_discount_percent: 18.00,
     max_skips_allowed: 2,
     is_active: true
   },
+  // 4. Student: Budget Veg Lunch — Weekday Plan
+  {
+    id: 'sub_plan_04',
+    seller_id: 'seller_01',
+    plan_type: 'student',
+    name: 'Budget Veg Lunch — Weekday Plan',
+    description: 'Pocket-friendly student homestyle lunch delivered Monday to Friday. Saturdays and Sundays are strictly excluded, billing only for scheduled weekdays with zero weekend charges.',
+    cycle_days: 28, // 4-week term window, weekdays dynamically calculated
+    delivery_frequency: 'weekdays_only',
+    supported_slots: ['lunch'],
+    base_price_per_meal: 89.00,
+    plan_discount_percent: 20.00,
+    max_skips_allowed: 1,
+    is_active: true
+  },
+  // 5. Student: High-Protein Lunch — Weekday Plan
+  {
+    id: 'sub_plan_05',
+    seller_id: 'seller_05',
+    plan_type: 'student',
+    name: 'High-Protein Lunch — Weekday Plan',
+    description: 'High-protein student fuel bowl delivered on college weekdays (Monday to Friday). Macro-balanced with soya, paneer, lentils, and fresh greens. Zero weekend deliveries or charges.',
+    cycle_days: 28, // 4-week term window, weekdays dynamically calculated
+    delivery_frequency: 'weekdays_only',
+    supported_slots: ['lunch'],
+    base_price_per_meal: 140.00,
+    plan_discount_percent: 25.00,
+    max_skips_allowed: 1,
+    is_active: true
+  },
+  // 6. Student: Lunch + Dinner — Weekday Plan
   {
     id: 'sub_plan_06',
-    seller_id: 'seller_03',
-    plan_type: 'working_professional',
-    name: 'Sattvik Pure Veg 28-Day Traditional Dabba',
-    description: 'Pure vegetarian 28 consecutive day meal cycle with no onion and no garlic options. Gentle on digestion, freshly tossed rotis and seasonal green subzis.',
-    cycle_days: 28,
-    delivery_frequency: 'daily',
-    supported_slots: ['lunch', 'dinner', 'both'],
-    base_price_per_meal: 135.00,
+    seller_id: 'seller_04',
+    plan_type: 'student',
+    name: 'Lunch + Dinner — Weekday Plan',
+    description: 'Complete student weekday nutrition with both lunch and dinner delivered Monday to Friday. Saturdays and Sundays are excluded from both deliveries and billing.',
+    cycle_days: 28, // 4-week term window, weekdays dynamically calculated
+    delivery_frequency: 'weekdays_only',
+    supported_slots: ['both', 'lunch', 'dinner'],
+    base_price_per_meal: 99.00,
     plan_discount_percent: 20.00,
-    max_skips_allowed: 2,
+    max_skips_allowed: 1,
     is_active: true
   }
 ];

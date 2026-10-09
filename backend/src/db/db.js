@@ -1110,7 +1110,18 @@ class DatabaseService {
 
         const sql = `INSERT INTO \`subscription_plans\` (id, seller_id, plan_type, name, description, cycle_days, delivery_frequency, supported_slots, base_price_per_meal, plan_discount_percent, max_skips_allowed, is_active)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), base_price_per_meal = VALUES(base_price_per_meal), plan_discount_percent = VALUES(plan_discount_percent), is_active = VALUES(is_active)`;
+          ON DUPLICATE KEY UPDATE 
+            seller_id = VALUES(seller_id),
+            plan_type = VALUES(plan_type),
+            name = VALUES(name), 
+            description = VALUES(description), 
+            cycle_days = VALUES(cycle_days),
+            delivery_frequency = VALUES(delivery_frequency),
+            supported_slots = VALUES(supported_slots),
+            base_price_per_meal = VALUES(base_price_per_meal), 
+            plan_discount_percent = VALUES(plan_discount_percent), 
+            max_skips_allowed = VALUES(max_skips_allowed),
+            is_active = VALUES(is_active)`;
         await this.pool.query(sql, [
           sp.id,
           realSellerId,
@@ -1131,6 +1142,8 @@ class DatabaseService {
         const existing = localStore.findOne('subscription_plans', r => r.id === sp.id);
         if (!existing) {
           localStore.insert('subscription_plans', { ...sp, seller_id: realSellerId });
+        } else {
+          localStore.update('subscription_plans', r => r.id === sp.id, { ...sp, seller_id: realSellerId });
         }
         planIdMap.set(sp.id, sp.id);
       }

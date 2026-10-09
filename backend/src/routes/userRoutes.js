@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from '../db/db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, isDemoUser } from '../middleware/auth.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -16,10 +16,16 @@ router.get('/addresses', async (req, res) => {
   }
 });
 
-// 2. Add new address
+// 2. Add new address (Enforce demo account restriction on backend)
 router.post('/addresses', async (req, res) => {
   try {
     const user = req.user;
+    if (isDemoUser(user)) {
+      return res.status(403).json({
+        error: 'Demo accounts cannot save personal delivery addresses. Please sign in or create your own personal account.'
+      });
+    }
+
     const {
       label = 'Home',
       recipient_name,
@@ -65,6 +71,40 @@ router.post('/addresses', async (req, res) => {
   } catch (err) {
     console.error('Save address error:', err);
     res.status(500).json({ error: 'Server error saving address.' });
+  }
+});
+
+// 2b. Check location serviceability against a kitchen or current cart
+router.post('/check-serviceability', async (req, res) => {
+  try {
+    const { seller_id, pincode, area } = req.body;
+    if (!seller_id) {
+      return res.status(400).json({ error: 'seller_id is required.' });
+    }
+    const seller = await db.findOne('seller_profiles', { id: seller_id });
+    if (!seller) {
+      return res.status(404).json({ error: 'Kitchen profile not found.' });
+    }
+
+    const servedPincodes = Array.isArray(seller.pincodes_served)
+      ? seller.pincodes_served
+      : (typeof seller.pincodes_served === 'string' ? JSON.parse(seller.pincodes_served) : []);
+
+    const isServiceable = !pincode || servedPincodes.length === 0 || servedPincodes.includes(String(pincode).trim());
+
+    res.json({
+      seller_id: seller.id,
+      seller_name: seller.business_name,
+      pincode: pincode || null,
+      area: area || seller.area,
+      serviceable: isServiceable,
+      message: isServiceable
+        ? `"${seller.business_name}" delivers to ${area || pincode || 'your location'}.`
+        : `"${seller.business_name}" currently delivers to pincodes: ${servedPincodes.join(', ')}. Delivery may take longer or require an alternate kitchen.`
+    });
+  } catch (err) {
+    console.error('Check serviceability error:', err);
+    res.status(500).json({ error: 'Server error checking serviceability.' });
   }
 });
 

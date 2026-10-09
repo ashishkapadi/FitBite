@@ -3,13 +3,36 @@ import { db } from '../db/db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fitbite-super-secure-dev-jwt-secret-key-2026';
 
+export function isDemoUser(user) {
+  if (!user) return false;
+  if (user.is_demo === true || user.is_demo === 1) return true;
+  if (typeof user.email === 'string' && user.email.toLowerCase().endsWith('@fitbite.demo')) return true;
+  const demoIds = new Set([
+    'user_cust_01',
+    'user_cust_family',
+    'user_sell_01',
+    'user_sell_02',
+    'user_sell_03',
+    'user_sell_04',
+    'user_sell_05',
+    'user_sell_06',
+    'user_sell_07',
+    'user_sell_08',
+    'user_sell_pending',
+    'user_admin_01',
+    'user_deliv_01'
+  ]);
+  return demoIds.has(user.id);
+}
+
 export function signToken(user) {
   return jwt.sign(
     {
       id: user.id,
       email: user.email,
       role: user.role,
-      full_name: user.full_name
+      full_name: user.full_name,
+      is_demo: isDemoUser(user)
     },
     JWT_SECRET,
     { expiresIn: '7d' }
@@ -37,6 +60,7 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ error: 'User account not found or deactivated.' });
     }
 
+    user.is_demo = isDemoUser(user);
     req.user = user;
     next();
   } catch (err) {

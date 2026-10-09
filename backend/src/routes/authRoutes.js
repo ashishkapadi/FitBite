@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { db } from '../db/db.js';
-import { signToken, requireAuth } from '../middleware/auth.js';
+import { signToken, requireAuth, isDemoUser } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -94,6 +94,7 @@ router.post('/register-customer', async (req, res) => {
         full_name: newUser.full_name,
         phone: newUser.phone,
         role: newUser.role,
+        is_demo: isDemoUser(newUser),
         onboarding_completed: false
       }
     });
@@ -280,6 +281,7 @@ router.post('/login', async (req, res) => {
         full_name: user.full_name,
         phone: user.phone,
         role: user.role,
+        is_demo: isDemoUser(user),
         onboarding_completed: customerProfile ? Boolean(customerProfile.onboarding_completed) : true
       },
       customerProfile,
@@ -315,6 +317,7 @@ router.get('/me', requireAuth, async (req, res) => {
         full_name: user.full_name,
         phone: user.phone,
         role: user.role,
+        is_demo: isDemoUser(user),
         onboarding_completed: customerProfile ? Boolean(customerProfile.onboarding_completed) : true
       },
       customerProfile,

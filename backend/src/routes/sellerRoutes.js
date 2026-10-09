@@ -148,19 +148,132 @@ router.post('/meals', async (req, res) => {
 router.put('/meals/:id', async (req, res) => {
   try {
     const meal = await db.findOne('meals', { id: req.params.id, seller_id: req.seller.id });
-    if (!meal) return res.status(404).json({ error: 'Meal not found in your kitchen.' });
+    if (!meal) {
+      return res.status(404).json({ error: 'Meal not found in your kitchen catalog.' });
+    }
 
-    const updates = { ...req.body };
-    delete updates.id;
-    delete updates.seller_id;
+    const {
+      name,
+      description,
+      category_id,
+      cuisine,
+      base_price,
+      portion_choices,
+      ingredients,
+      allergens,
+      dietary_tags,
+      is_available,
+      is_tiffin_eligible,
+      prep_time_minutes,
+      calories,
+      protein_grams,
+      carbs_grams,
+      fat_grams,
+      image_url,
+      client_last_updated
+    } = req.body;
+
+    // Stale edit check if client provided previous timestamp
+    if (client_last_updated && meal.updated_at) {
+      const clientTime = new Date(client_last_updated).getTime();
+      const serverTime = new Date(meal.updated_at).getTime();
+      if (serverTime - clientTime > 5000) {
+        return res.status(409).json({
+          error: 'This meal was modified by another session. Please refresh to load the latest changes before saving.'
+        });
+      }
+    }
+
+    // Validation
+    const updates = {};
+
+    if (name !== undefined) {
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: 'Dish name cannot be empty.' });
+      }
+      updates.name = name.trim();
+      updates.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    }
+
+    if (description !== undefined) {
+      updates.description = description.trim();
+    }
+
+    if (category_id !== undefined) {
+      updates.category_id = category_id;
+    }
+
+    if (cuisine !== undefined) {
+      updates.cuisine = cuisine.trim();
+    }
+
+    if (base_price !== undefined) {
+      const parsedPrice = parseFloat(base_price);
+      if (isNaN(parsedPrice) || parsedPrice <= 0) {
+        return res.status(400).json({ error: 'Base price must be a valid positive amount in ₹.' });
+      }
+      updates.base_price = Math.round(parsedPrice * 100) / 100;
+    }
+
+    if (portion_choices !== undefined) {
+      updates.portion_choices = Array.isArray(portion_choices) ? portion_choices : [portion_choices];
+    }
+
+    if (ingredients !== undefined) {
+      updates.ingredients = Array.isArray(ingredients) ? ingredients : [];
+    }
+
+    if (allergens !== undefined) {
+      updates.allergens = Array.isArray(allergens) ? allergens : [];
+    }
+
+    if (dietary_tags !== undefined) {
+      updates.dietary_tags = Array.isArray(dietary_tags) ? dietary_tags : ['Vegetarian'];
+    }
+
+    if (is_available !== undefined) {
+      updates.is_available = Boolean(is_available);
+    }
+
+    if (is_tiffin_eligible !== undefined) {
+      updates.is_tiffin_eligible = Boolean(is_tiffin_eligible);
+    }
+
+    if (prep_time_minutes !== undefined) {
+      const parsedPrep = parseInt(prep_time_minutes, 10);
+      updates.prep_time_minutes = isNaN(parsedPrep) || parsedPrep < 5 ? 25 : parsedPrep;
+    }
+
+    if (calories !== undefined) {
+      updates.calories = calories ? parseInt(calories, 10) : null;
+    }
+
+    if (protein_grams !== undefined) {
+      updates.protein_grams = protein_grams ? parseFloat(protein_grams) : null;
+    }
+
+    if (carbs_grams !== undefined) {
+      updates.carbs_grams = carbs_grams ? parseFloat(carbs_grams) : null;
+    }
+
+    if (fat_grams !== undefined) {
+      updates.fat_grams = fat_grams ? parseFloat(fat_grams) : null;
+    }
+
+    if (image_url !== undefined && image_url.trim()) {
+      updates.image_url = image_url.trim();
+    }
 
     await db.update('meals', { id: meal.id }, updates);
     const updated = await db.findOne('meals', { id: meal.id });
 
-    res.json({ message: 'Meal updated successfully.', meal: updated });
+    res.json({
+      message: `"${updated.name}" updated successfully.`,
+      meal: updated
+    });
   } catch (err) {
     console.error('Seller update meal error:', err);
-    res.status(500).json({ error: 'Server error updating meal.' });
+    res.status(500).json({ error: 'Server error updating meal. Please check inputs and try again.' });
   }
 });
 
