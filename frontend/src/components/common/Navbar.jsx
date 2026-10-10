@@ -238,7 +238,7 @@ export function Navbar() {
             }}>
               Fit<span style={{ color: '#10B981' }}>Bite</span>
             </div>
-            <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }} className="hide-mobile">
               Your meals, your way
             </div>
           </div>
@@ -470,10 +470,10 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => openAuthModal({ mode: 'signin', accountType: 'customer' })}
-              className="btn btn-primary btn-sm"
-              style={{ fontWeight: 600 }}
+              className="btn btn-primary btn-sm navbar-auth-btn"
+              style={{ fontWeight: 600, whiteSpace: 'nowrap' }}
             >
-              Sign In / Join
+              Sign In
             </button>
           )}
 
@@ -547,6 +547,20 @@ export function Navbar() {
           <Link to="/meal-planner" onClick={() => setIsMobileMenuOpen(false)} style={{ fontWeight: 600, padding: '8px 0', color: '#334155' }}>
             7-Day Diet Planner
           </Link>
+
+          {!user && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                openAuthModal({ mode: 'signin', accountType: 'customer' });
+              }}
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '8px', padding: '10px', fontWeight: 600 }}
+            >
+              Sign In / Join
+            </button>
+          )}
         </div>
       )}
 
@@ -566,6 +580,9 @@ export function Navbar() {
         }
         @media (min-width: 901px) {
           .show-mobile-only { display: none !important; }
+        }
+        @media (max-width: 480px) {
+          .navbar-auth-btn { display: none !important; }
         }
       `}</style>
     </header>

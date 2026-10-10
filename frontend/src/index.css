@@ -71,7 +71,6 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -340,3 +339,124 @@ img {
 .gap-4 { gap: 16px; }
 .gap-6 { gap: 24px; }
 .grid { display: grid; }
+
+/* Tiffin Subscription Plans & Sample Dishes Responsive Layout */
+.tiffin-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+}
+
+@media (max-width: 1080px) {
+  .tiffin-plans-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .tiffin-plans-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+}
+
+.tiffin-plan-card {
+  background: #FFFFFF;
+  border-radius: 1.25rem;
+  padding: 2rem;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  container-name: plan-card;
+}
+
+@media (max-width: 480px) {
+  .tiffin-plan-card {
+    padding: 1.25rem;
+  }
+}
+
+.sample-dishes-section {
+  margin-top: auto;
+  border-top: 1px solid #F1F5F9;
+  padding-top: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.sample-dishes-heading {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748B;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  min-width: 0;
+}
+
+.sample-dishes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@container plan-card (max-width: 250px) {
+  .sample-dishes-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 360px) {
+  .sample-dishes-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sample-dish-tile {
+  background: #F8FAFC;
+  border-radius: 8px;
+  padding: 6px;
+  text-align: center;
+  border: 1px solid #E2E8F0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sample-dish-image {
+  width: 100%;
+  display: block;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.sample-dish-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1E293B;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  margin: 0;
+  width: 100%;
+}
+

@@ -328,7 +328,7 @@ export default function SubscriptionsPage() {
 
           {/* Plan Comparison Cards */}
           {!loadingPlans && plans.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
+            <div className="tiffin-plans-grid">
               {plans.map((p) => {
                 const isSelected = p.id === selectedPlanId;
                 const isStudent = p.plan_type === 'student';
@@ -338,14 +338,9 @@ export default function SubscriptionsPage() {
                   <div
                     key={p.id}
                     onClick={() => setSelectedPlanId(p.id)}
+                    className="tiffin-plan-card"
                     style={{
-                      background: '#FFFFFF',
-                      borderRadius: '1.25rem',
                       border: isSelected ? '2px solid #10B981' : '1px solid #E5E7EB',
-                      padding: '2rem',
-                      cursor: 'pointer',
-                      position: 'relative',
-                      transition: 'all 0.2s ease',
                       boxShadow: isSelected ? '0 10px 25px -5px rgba(16, 185, 129, 0.15)' : '0 2px 4px rgba(0,0,0,0.04)'
                     }}
                   >
@@ -368,7 +363,7 @@ export default function SubscriptionsPage() {
                     </p>
 
                     <div style={{ background: '#F9FAFB', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.25rem', border: '1px solid #F3F4F6' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827' }}>₹{perMealPrice}</span>
                         <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>/ meal ({p.base_price_per_meal} base)</span>
                         {p.plan_discount_percent > 0 && (
@@ -377,7 +372,7 @@ export default function SubscriptionsPage() {
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: '#334155', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: '0.82rem', color: '#334155', marginTop: '0.5rem', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
                         <span>Kitchen: <b>{p.kitchen_name || p.seller?.business_name || 'Verified Kitchen'}</b></span>
                         <span style={{ color: '#F59E0B', fontWeight: 700 }}>★ {p.seller?.rating || '4.9'}</span>
                       </div>
@@ -432,15 +427,20 @@ export default function SubscriptionsPage() {
 
                     {/* Sample Kitchen Dishes Preview */}
                     {p.sample_meals && p.sample_meals.length > 0 && (
-                      <div style={{ marginTop: '0.5rem', borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem' }}>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                      <div className="sample-dishes-section">
+                        <div className="sample-dishes-heading">
                           Sample Dishes from {p.kitchen_name || 'Kitchen'}:
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                        <div className="sample-dishes-grid">
                           {p.sample_meals.map(sm => (
-                            <div key={sm.id} style={{ background: '#F8FAFC', borderRadius: '6px', padding: '4px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
-                              <ImageWithFallback src={sm.image_url} alt={sm.name} style={{ width: '100%', height: '48px', objectFit: 'cover', borderRadius: '4px', marginBottom: '3px' }} />
-                              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div key={sm.id} className="sample-dish-tile">
+                              <ImageWithFallback
+                                src={sm.image_url}
+                                alt={sm.name}
+                                category="sample"
+                                className="sample-dish-image"
+                              />
+                              <div className="sample-dish-name">
                                 {sm.name}
                               </div>
                             </div>
@@ -456,18 +456,18 @@ export default function SubscriptionsPage() {
 
           {/* Configuration & Pre-Purchase Calculator */}
           {selectedPlan && (
-            <div style={{ background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E5E7EB', padding: '2.5rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+            <div style={{ background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E5E7EB', padding: 'clamp(1.25rem, 4vw, 2.5rem)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', minWidth: 0, boxSizing: 'border-box' }}>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#111827', margin: '0 0 1.5rem' }}>
                 Customize & Calculate Your Schedule
               </h2>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem', marginBottom: '2.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '1.5rem', marginBottom: '2.5rem', minWidth: 0 }}>
                 {/* Meal Slots Selector */}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 700, color: '#374151', marginBottom: '0.75rem' }}>
                     Daily Meal Slot(s)
                   </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.5rem', minWidth: 0 }}>
                     {[
                       { id: 'lunch', label: 'Lunch', sub: '12:00 - 1:30 PM', icon: Sun },
                       { id: 'dinner', label: 'Dinner', sub: '7:30 - 9:00 PM', icon: Moon },
@@ -584,7 +584,7 @@ export default function SubscriptionsPage() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1.5rem' }}>
+                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                       <div style={{ textAlign: 'right' }}>
                         <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600, display: 'block' }}>ELIGIBLE DAYS</span>
                         <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>{calculation.delivery_days_count} days</span>
@@ -597,7 +597,7 @@ export default function SubscriptionsPage() {
                   </div>
 
                   {/* Financial itemization */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '1rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
                     <div>
                       <span style={{ color: '#64748B' }}>Base Price / Meal:</span>
                       <div style={{ fontWeight: 700, color: '#1E293B' }}>₹{calculation.base_price_per_meal}</div>
@@ -623,8 +623,8 @@ export default function SubscriptionsPage() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                      <div style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%', justifyContent: 'space-between' }}>
+                      <div>
                         <span style={{ fontSize: '0.8rem', color: '#64748B', display: 'block' }}>GRAND TOTAL</span>
                         <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827' }}>₹{calculation.grand_total}</span>
                       </div>
@@ -633,7 +633,7 @@ export default function SubscriptionsPage() {
                         className="btn btn-primary"
                         onClick={handleSubscribe}
                         disabled={subscribing}
-                        style={{ padding: '0.85rem 2rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                        style={{ padding: '0.85rem 1.5rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flex: '1 1 auto', minWidth: 'min(100%, 200px)' }}
                       >
                         {subscribing ? 'Activating...' : 'Activate Subscription'} <ArrowRight size={18} />
                       </button>
