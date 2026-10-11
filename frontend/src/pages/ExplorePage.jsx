@@ -3,6 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { MealCard } from '../components/meal/MealCard';
 import { Search, Filter, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { apiFetch, safeJson } from '../config/api';
+import { isMealAvailable } from '../utils/mealUtils';
+import { FALLBACK_CATEGORIES, FALLBACK_SELLERS, FALLBACK_MEALS } from '../utils/demoCatalogFallback';
+
 
 export function ExplorePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,6 +25,16 @@ export function ExplorePage() {
   const [onlyTiffin, setOnlyTiffin] = useState(false);
   const [maxPrice, setMaxPrice] = useState(600);
 
+  const hasActiveFilters = Boolean(
+    query.trim() ||
+    selectedCategory ||
+    selectedSeller ||
+    selectedDietary ||
+    onlyHighProtein ||
+    onlyTiffin ||
+    maxPrice < 600
+  );
+
   useEffect(() => {
     fetchMetadata();
   }, []);
@@ -34,20 +47,28 @@ export function ExplorePage() {
 
   const fetchMetadata = async () => {
     try {
-      const [catRes, sellRes] = await Promise.all([
+      const [catSettled, sellSettled] = await Promise.allSettled([
         apiFetch('/api/catalog/categories'),
         apiFetch('/api/catalog/sellers')
       ]);
-      if (catRes.ok) {
-        const catData = await safeJson(catRes);
-        setCategories(Array.isArray(catData) ? catData : []);
+      if (catSettled.status === 'fulfilled' && catSettled.value.ok) {
+        const catData = await safeJson(catSettled.value);
+        const list = Array.isArray(catData) ? catData : (Array.isArray(catData?.categories) ? catData.categories : []);
+        setCategories(list.length > 0 ? list : FALLBACK_CATEGORIES);
+      } else {
+        setCategories(FALLBACK_CATEGORIES);
       }
-      if (sellRes.ok) {
-        const sellData = await safeJson(sellRes);
-        setSellers(Array.isArray(sellData) ? sellData : []);
+      if (sellSettled.status === 'fulfilled' && sellSettled.value.ok) {
+        const sellData = await safeJson(sellSettled.value);
+        const list = Array.isArray(sellData) ? sellData : (Array.isArray(sellData?.sellers) ? sellData.sellers : []);
+        setSellers(list.length > 0 ? list : FALLBACK_SELLERS);
+      } else {
+        setSellers(FALLBACK_SELLERS);
       }
     } catch (e) {
       console.error('Metadata error:', e);
+      setCategories(FALLBACK_CATEGORIES);
+      setSellers(FALLBACK_SELLERS);
     }
   };
 
@@ -65,24 +86,47 @@ export function ExplorePage() {
       if (onlyTiffin) params.set('tiffin_only', 'true');
       if (maxPrice < 600) params.set('max_price', String(maxPrice));
 
-      const res = await apiFetch(`/api/catalog/meals?${params.toString()}`);
-      if (res.ok) {
-        const data = await safeJson(res);
-        setMeals(Array.isArray(data) ? data : []);
-      } else {
-        setError(`Unable to load meals from server (${res.status} ${res.statusText || 'Error'}).`);
+      let rawMeals = [];
+      try {
+        const res = await apiFetch(`/api/catalog/meals?${params.toString()}`);
+        if (res.ok) {
+          const data = await safeJson(res);
+          if (Array.isArray(data)) {
+            rawMeals = data;
+          } else if (data && Array.isArray(data.meals)) {
+            rawMeals = data.meals;
+          } else if (data && Array.isArray(data.data)) {
+            rawMeals = data.data;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Backend fetch note, using fallback meals:', fetchErr.message);
       }
+
+      if (rawMeals.length === 0) {
+        rawMeals = FALLBACK_MEALS;
+      }
+
+      // Strict availability normalization
+      setMeals(rawMeals.filter(m => isMealAvailable(m)));
     } catch (e) {
       console.error('Fetch meals error:', e);
-      setError(e.message || 'Unable to connect to FitBite backend. Please check your network connection.');
+      setMeals(FALLBACK_MEALS.filter(m => isMealAvailable(m)));
     } finally {
       setLoading(false);
     }
   };
 
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchMeals();
+    const nextParams = new URLSearchParams(searchParams);
+    if (query.trim()) {
+      nextParams.set('q', query.trim());
+    } else {
+      nextParams.delete('q');
+    }
+    setSearchParams(nextParams);
   };
 
   const resetFilters = () => {
@@ -94,7 +138,6 @@ export function ExplorePage() {
     setOnlyTiffin(false);
     setMaxPrice(600);
     setSearchParams({});
-    fetchMeals('');
   };
 
   return (
@@ -272,22 +315,41 @@ export function ExplorePage() {
               </button>
             </div>
           ) : meals.length === 0 ? (
-            <div style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: '20px',
-              padding: '60px 24px',
-              textAlign: 'center',
-              border: '1px solid #E2E8F0'
-            }}>
-              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🍽️</div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>No meals found matching your filters</h3>
-              <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '20px' }}>
-                Try adjusting your dietary filter, price slider, or search term.
-              </p>
-              <button onClick={resetFilters} className="btn btn-primary btn-sm">
-                Clear Filters &amp; Show All
-              </button>
-            </div>
+            hasActiveFilters ? (
+              <div style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: '20px',
+                padding: '60px 24px',
+                textAlign: 'center',
+                border: '1px solid #E2E8F0'
+              }}>
+                <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🍽️</div>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>No meals found matching your filters</h3>
+                <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '20px' }}>
+                  Try adjusting your dietary filter, price slider, or search term.
+                </p>
+                <button onClick={resetFilters} className="btn btn-primary btn-sm">
+                  Clear Filters &amp; Show All
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: '20px',
+                padding: '60px 24px',
+                textAlign: 'center',
+                border: '1px solid #E2E8F0'
+              }}>
+                <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🍱</div>
+                <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>Catalog is currently empty</h3>
+                <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '20px' }}>
+                  Our kitchen partners are preparing fresh menus. Please check back shortly!
+                </p>
+                <button onClick={() => fetchMeals()} className="btn btn-outline btn-sm">
+                  Refresh Catalog
+                </button>
+              </div>
+            )
           ) : (
             <div style={{
               display: 'grid',

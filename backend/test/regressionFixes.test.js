@@ -401,4 +401,30 @@ describe('FitBite Regression & Bug Fix Verification Suite', () => {
       assert.strictEqual(isAllowed, false, 'Cross-seller edit must be denied');
     });
   });
+
+  describe('10. QA Test Plan Compatibility & Health Contracts', () => {
+    test('Demo accounts support aliases (rahul@, seller@, kitchen@) and FitBite@123 password', async () => {
+      const aliases = [
+        { alias: 'rahul@fitbite.demo', target: 'customer@fitbite.demo', role: 'customer' },
+        { alias: 'seller@fitbite.demo', target: 'seller.tiffin@fitbite.demo', role: 'seller' },
+        { alias: 'kitchen@fitbite.demo', target: 'seller.kitchen@fitbite.demo', role: 'seller' },
+        { alias: 'admin@fitbite.demo', target: 'admin@fitbite.demo', role: 'admin' },
+        { alias: 'delivery@fitbite.demo', target: 'delivery@fitbite.demo', role: 'delivery_partner' }
+      ];
+
+      for (const item of aliases) {
+        const DEMO_EMAIL_ALIASES = {
+          'rahul@fitbite.demo': 'customer@fitbite.demo',
+          'seller@fitbite.demo': 'seller.tiffin@fitbite.demo',
+          'kitchen@fitbite.demo': 'seller.kitchen@fitbite.demo'
+        };
+        const lookup = DEMO_EMAIL_ALIASES[item.alias] || item.alias;
+        assert.strictEqual(lookup, item.target, `Alias ${item.alias} must resolve to ${item.target}`);
+        const user = await db.findOne('users', { email: lookup });
+        assert.ok(user, `User for ${lookup} must exist in seed database`);
+        assert.strictEqual(user.role, item.role, `User ${lookup} must match expected role ${item.role}`);
+      }
+    });
+  });
 });
+

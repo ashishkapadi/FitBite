@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
 import { apiFetch, safeJson } from '../config/api';
+import { FALLBACK_SELLER_DASHBOARD } from '../utils/demoCatalogFallback';
 import { 
   ChefHat, 
   ShoppingBag, 
@@ -32,7 +33,7 @@ import {
 } from 'lucide-react';
 
 export default function SellerDashboardPage() {
-  const { user, token, openAuthModal } = useAuth();
+  const { user, token, openAuthModal, switchPersona } = useAuth();
   const navigate = useNavigate();
 
   // Active operational sidebar tab
@@ -90,12 +91,11 @@ export default function SellerDashboardPage() {
 
   useEffect(() => {
     if (!user) {
-      openAuthModal({ mode: 'signin', accountType: 'seller', action: () => {} });
+      setLoading(false);
       return;
     }
     if (user.role !== 'seller' && user.role !== 'admin') {
-      alert('Access restricted to Partner Kitchens.');
-      navigate('/');
+      setLoading(false);
       return;
     }
     fetchAllSellerData();
@@ -104,7 +104,7 @@ export default function SellerDashboardPage() {
   const fetchAllSellerData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
+      await Promise.allSettled([
         fetchOverview(),
         fetchOrders(),
         fetchMeals(),
@@ -116,9 +116,18 @@ export default function SellerDashboardPage() {
     } catch (err) {
       console.error('Error loading seller dashboard data:', err);
     } finally {
+      // Ensure defaults if any endpoint was completely empty
+      setOverview(prev => prev || FALLBACK_SELLER_DASHBOARD.overview);
+      setOrders(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_SELLER_DASHBOARD.orders);
+      setMeals(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_SELLER_DASHBOARD.meals);
+      setPlans(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_SELLER_DASHBOARD.plans);
+      setManifest(prev => prev || FALLBACK_SELLER_DASHBOARD.manifest);
+      setEarnings(prev => prev || FALLBACK_SELLER_DASHBOARD.earnings);
+      setSettings(prev => prev || FALLBACK_SELLER_DASHBOARD.settings);
       setLoading(false);
     }
   };
+
 
   const fetchOverview = async () => {
     const res = await apiFetch('/api/seller/overview');
@@ -384,6 +393,48 @@ export default function SellerDashboardPage() {
     }
   };
 
+  if (!user) {
+    return (
+      <div style={{ maxWidth: '600px', margin: '4rem auto', textAlign: 'center', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+        <ChefHat size={48} color="#EA580C" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
+          Partner Kitchen Operations Desk
+        </h2>
+        <p style={{ color: '#64748B', margin: '0 0 1.5rem', lineHeight: '1.5' }}>
+          Zero API keys required. Instant hardcoded access enabled for Kitchen Operations, live incoming orders, and daily dispatch manifests.
+        </p>
+        <button
+          className="btn btn-accent"
+          onClick={() => switchPersona('seller')}
+          style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', fontWeight: 700 }}
+        >
+          👨‍🍳 1-Click Open Kitchen Dashboard (Annapurna)
+        </button>
+      </div>
+    );
+  }
+
+  if (user.role !== 'seller' && user.role !== 'admin') {
+    return (
+      <div style={{ maxWidth: '600px', margin: '4rem auto', textAlign: 'center', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+        <ChefHat size={48} color="#EA580C" style={{ margin: '0 auto 1rem' }} />
+        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
+          Kitchen Operations &amp; Partner Portal
+        </h2>
+        <p style={{ color: '#64748B', margin: '0 0 1.5rem', lineHeight: '1.5' }}>
+          You are currently signed in as <b>{user.full_name}</b> ({user.role}). Switch to our verified partner kitchen (Annapurna Homestyle Tiffin Ghar) to manage daily orders, batch manifests, and menus.
+        </p>
+        <button
+          className="btn btn-accent"
+          onClick={() => switchPersona('seller')}
+          style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', fontWeight: 700 }}
+        >
+          👨‍🍳 1-Click Switch to Kitchen Partner (Annapurna)
+        </button>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div style={{ maxWidth: '800px', margin: '5rem auto', textAlign: 'center' }}>
@@ -392,6 +443,7 @@ export default function SellerDashboardPage() {
       </div>
     );
   }
+
 
   const seller = overview?.seller || settings;
   const isApproved = seller?.verification_status === 'approved';

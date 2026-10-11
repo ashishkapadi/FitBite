@@ -4,6 +4,13 @@ import { MealCard } from '../components/meal/MealCard';
 import { ImageWithFallback } from '../components/common/ImageWithFallback';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch, safeJson } from '../config/api';
+import { FALLBACK_CATEGORIES, FALLBACK_SELLERS, FALLBACK_MEALS } from '../utils/demoCatalogFallback';
+import {
+  isMealAvailable,
+  isMealFeatured,
+  getDietaryTags,
+  normalizeMealProps
+} from '../utils/mealUtils';
 import {
   Sparkles,
   ArrowRight,
@@ -43,34 +50,73 @@ export function HomePage() {
     try {
       setLoading(true);
       setError(null);
-      const [catRes, mealsRes, sellersRes] = await Promise.all([
+
+      // Fault-tolerant loading using Promise.allSettled so secondary metadata failures
+      // never prevent available meals from rendering!
+      const [catSettled, mealsSettled, sellersSettled] = await Promise.allSettled([
         apiFetch('/api/catalog/categories'),
         apiFetch('/api/catalog/meals'),
         apiFetch('/api/catalog/sellers')
       ]);
 
-      if (catRes.ok) {
-        const catData = await safeJson(catRes);
-        setCategories(Array.isArray(catData) ? catData : []);
-      }
-
-      if (mealsRes.ok) {
-        const mealData = await safeJson(mealsRes);
-        if (Array.isArray(mealData)) {
-          setPopularMeals(mealData.filter(m => m.is_featured).slice(0, 8));
-          setHighProteinMeals(mealData.filter(m => (m.protein_grams || 0) >= 25).slice(0, 4));
-          setFamilyCombos(mealData.filter(m => (m.dietary_tags || []).includes('Family Combos')).slice(0, 3));
-        }
+      if (catSettled.status === 'fulfilled' && catSettled.value.ok) {
+        const catData = await safeJson(catSettled.value);
+        const list = Array.isArray(catData) ? catData : (Array.isArray(catData?.categories) ? catData.categories : []);
+        setCategories(list.length > 0 ? list : FALLBACK_CATEGORIES);
       } else {
-        setError(`Unable to load food catalog from backend (${mealsRes.status} ${mealsRes.statusText || 'Error'}).`);
+        setCategories(FALLBACK_CATEGORIES);
       }
 
-      if (sellersRes.ok) {
-        const sellerData = await safeJson(sellersRes);
-        if (Array.isArray(sellerData)) {
-          setFeaturedSellers(sellerData.slice(0, 6));
+      if (sellersSettled.status === 'fulfilled' && sellersSettled.value.ok) {
+        const sellerData = await safeJson(sellersSettled.value);
+        const list = Array.isArray(sellerData) ? sellerData : (Array.isArray(sellerData?.sellers) ? sellerData.sellers : []);
+        setFeaturedSellers(list.length > 0 ? list.slice(0, 6) : FALLBACK_SELLERS.slice(0, 6));
+      } else {
+        setFeaturedSellers(FALLBACK_SELLERS.slice(0, 6));
+      }
+
+      let rawMeals = [];
+      if (mealsSettled.status === 'fulfilled' && mealsSettled.value.ok) {
+        const mealData = await safeJson(mealsSettled.value);
+        if (Array.isArray(mealData)) {
+          rawMeals = mealData;
+        } else if (mealData && Array.isArray(mealData.meals)) {
+          rawMeals = mealData.meals;
+        } else if (mealData && Array.isArray(mealData.data)) {
+          rawMeals = mealData.data;
         }
       }
+
+      if (rawMeals.length === 0) {
+        rawMeals = FALLBACK_MEALS;
+      }
+
+
+      // Explicit availability filter (1, '1', true)
+      const available = rawMeals.filter(m => isMealAvailable(m));
+
+      // Featured & Popular meals
+      const featured = available.filter(m => isMealFeatured(m));
+      const popular = featured.length >= 4 ? featured.slice(0, 8) : available.slice(0, 8);
+      setPopularMeals(popular);
+
+      // High-Protein (>= 20g protein or tagged protein)
+      const highProtein = available.filter(m => {
+        const protein = parseFloat(m.protein_grams || 0);
+        const tags = getDietaryTags(m).map(t => t.toLowerCase());
+        return protein >= 20 || tags.some(t => t.includes('protein'));
+      });
+      setHighProteinMeals(highProtein.length > 0 ? highProtein.slice(0, 4) : available.slice(0, 4));
+
+      // Family Combos / Thalis
+      const family = available.filter(m => {
+        const tags = getDietaryTags(m).map(t => t.toLowerCase());
+        const name = (m.name || '').toLowerCase();
+        return tags.some(t => t.includes('family') || t.includes('combo') || t.includes('thali')) ||
+               name.includes('combo') || name.includes('thali') || name.includes('family');
+      });
+      setFamilyCombos(family.length > 0 ? family.slice(0, 4) : available.slice(4, 8));
+
     } catch (err) {
       console.error('Home data load error:', err);
       setError(err.message || 'Unable to connect to FitBite backend. Please check your network connection.');
@@ -345,7 +391,12 @@ export function HomePage() {
             </Link>
           </div>
 
-          {error ? (
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: '#64748B' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '12px' }}>🍲</div>
+              Loading nutritious meals...
+            </div>
+          ) : error ? (
             <div style={{
               backgroundColor: '#FEF2F2',
               borderRadius: '20px',
@@ -362,6 +413,21 @@ export function HomePage() {
               <button onClick={() => fetchHomeData()} className="btn btn-primary btn-sm" style={{ backgroundColor: '#DC2626', borderColor: '#DC2626' }}>
                 Retry Loading
               </button>
+            </div>
+          ) : popularMeals.length === 0 ? (
+            <div style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '20px',
+              padding: '40px 24px',
+              textAlign: 'center',
+              border: '1.5px solid #E2E8F0',
+              marginBottom: '20px'
+            }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🍽️</div>
+              <h3 style={{ fontSize: '1.25rem', color: '#0F172A', marginBottom: '8px' }}>No meals currently available</h3>
+              <p style={{ color: '#64748B', fontSize: '0.92rem' }}>
+                Our kitchen partners are preparing fresh menus. Please check back shortly.
+              </p>
             </div>
           ) : (
             <div style={{
@@ -586,15 +652,25 @@ export function HomePage() {
             </Link>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
-            gap: '24px'
-          }}>
-            {highProteinMeals.map((meal) => (
-              <MealCard key={meal.id} meal={meal} />
-            ))}
-          </div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748B' }}>
+              Loading high-protein meals...
+            </div>
+          ) : highProteinMeals.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '30px 0', color: '#64748B' }}>
+              No high-protein meals currently in this section.
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+              gap: '24px'
+            }}>
+              {highProteinMeals.map((meal) => (
+                <MealCard key={meal.id} meal={meal} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -612,15 +688,25 @@ export function HomePage() {
             </Link>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: '24px'
-          }}>
-            {familyCombos.map((meal) => (
-              <MealCard key={meal.id} meal={meal} />
-            ))}
-          </div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748B' }}>
+              Loading family combos...
+            </div>
+          ) : familyCombos.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '30px 0', color: '#64748B' }}>
+              No family combos currently in this section.
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '24px'
+            }}>
+              {familyCombos.map((meal) => (
+                <MealCard key={meal.id} meal={meal} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

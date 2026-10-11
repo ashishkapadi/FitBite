@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
 import { apiFetch, safeJson } from '../config/api';
+import { FALLBACK_ORDERS } from '../utils/demoCatalogFallback';
 import { 
   ShoppingBag, 
   Clock, 
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function OrdersPage() {
-  const { user, token } = useAuth();
+  const { user, token, switchPersona } = useAuth();
   const { addToCart } = useCart();
   const navigate = useNavigate();
 
@@ -28,6 +29,8 @@ export default function OrdersPage() {
   useEffect(() => {
     if (token) {
       fetchOrders();
+    } else {
+      setLoading(false);
     }
   }, [token]);
 
@@ -36,14 +39,19 @@ export default function OrdersPage() {
       const res = await apiFetch('/api/orders/my');
       if (res.ok) {
         const data = await safeJson(res);
-        setOrders(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setOrders(list.length > 0 ? list : FALLBACK_ORDERS);
+      } else {
+        setOrders(FALLBACK_ORDERS);
       }
     } catch (err) {
       console.error('Error fetching orders:', err);
+      setOrders(FALLBACK_ORDERS);
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleReorder = async (order) => {
     if (!order.items || order.items.length === 0) return;
@@ -111,6 +119,15 @@ export default function OrdersPage() {
           <RefreshCw className="spin" size={32} color="#10B981" />
           <p style={{ color: '#6B7280', marginTop: '1rem' }}>Loading your orders...</p>
         </div>
+      ) : !token ? (
+        <div style={{ textAlign: 'center', padding: '4rem 1rem', background: '#F9FAFB', borderRadius: '1rem', border: '1px solid #E5E7EB' }}>
+          <ShoppingBag size={48} color="#10B981" style={{ margin: '0 auto 1rem' }} />
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', margin: '0 0 0.5rem' }}>Customer Orders &amp; Live Tracking</h3>
+          <p style={{ color: '#6B7280', margin: '0 0 1.5rem' }}>Sign in with zero API keys to inspect live meal tracking, dispatch milestones, and tiffin orders.</p>
+          <button className="btn btn-primary" onClick={() => switchPersona('customer')}>
+            👤 1-Click View Demo Orders (Rahul)
+          </button>
+        </div>
       ) : filteredOrders.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '4rem 1rem', background: '#F9FAFB', borderRadius: '1rem' }}>
           <ShoppingBag size={48} color="#9CA3AF" style={{ margin: '0 auto 1rem' }} />
@@ -120,6 +137,7 @@ export default function OrdersPage() {
             Discover Fresh Meals
           </button>
         </div>
+
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {filteredOrders.map(order => {

@@ -4,6 +4,9 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { ImageWithFallback } from '../components/common/ImageWithFallback';
 import { apiFetch, safeJson } from '../config/api';
+import { isMealAvailable } from '../utils/mealUtils';
+import { FALLBACK_MEALS, FALLBACK_CUSTOMIZATION_OPTIONS } from '../utils/demoCatalogFallback';
+
 import {
   Sliders,
   Sparkles,
@@ -60,40 +63,64 @@ export function BuildMealPage() {
 
   const fetchInitialData = async () => {
     try {
-      const [mealsRes, optRes] = await Promise.all([
+      const [mealsSettled, optSettled] = await Promise.allSettled([
         apiFetch('/api/catalog/meals'),
         apiFetch('/api/catalog/customization-options')
       ]);
 
-      if (mealsRes.ok) {
-        const mList = await safeJson(mealsRes);
-        setAvailableMeals(Array.isArray(mList) ? mList : []);
-        const initialId = mealIdParam || (mList[0]?.id || '');
-        setSelectedMealId(initialId);
+      let filtered = [];
+      if (mealsSettled.status === 'fulfilled' && mealsSettled.value.ok) {
+        const mData = await safeJson(mealsSettled.value);
+        let mList = [];
+        if (Array.isArray(mData)) {
+          mList = mData;
+        } else if (mData && Array.isArray(mData.meals)) {
+          mList = mData.meals;
+        } else if (mData && Array.isArray(mData.data)) {
+          mList = mData.data;
+        }
+        filtered = mList.filter(m => isMealAvailable(m));
       }
 
-      if (optRes.ok) {
-        const optData = await safeJson(optRes);
+      if (filtered.length === 0) {
+        filtered = FALLBACK_MEALS;
+      }
+      setAvailableMeals(filtered);
+      const initialId = mealIdParam || (filtered[0]?.id || '');
+      setSelectedMealId(initialId);
+
+      let optionsGrouped = null;
+      if (optSettled.status === 'fulfilled' && optSettled.value.ok) {
+        const optData = await safeJson(optSettled.value);
         if (optData && optData.grouped) {
-          setCustomOptions(optData.grouped);
-
-          // Set initial defaults
-          const defaultBase = optData.grouped.base?.find(o => o.is_default) || optData.grouped.base?.[0];
-          const defaultProtein = optData.grouped.protein?.[0];
-          const defaultSide = optData.grouped.side?.find(o => o.is_default) || optData.grouped.side?.[0];
-          const defaultSpice = optData.grouped.spice?.find(o => o.is_default) || optData.grouped.spice?.[1];
-          const defaultSauce = optData.grouped.sauce?.find(o => o.is_default) || optData.grouped.sauce?.[0];
-
-          if (defaultBase) setSelectedBaseId(defaultBase.id);
-          if (defaultProtein) setSelectedProteinId(defaultProtein.id);
-          if (defaultSide) setSelectedSideId(defaultSide.id);
-          if (defaultSpice) setSelectedSpiceId(defaultSpice.id);
-          if (defaultSauce) setSelectedSauceId(defaultSauce.id);
+          optionsGrouped = optData.grouped;
         }
       }
+
+      if (!optionsGrouped) {
+        optionsGrouped = FALLBACK_CUSTOMIZATION_OPTIONS;
+      }
+
+      setCustomOptions(optionsGrouped);
+
+      // Set initial defaults
+      const defaultBase = optionsGrouped.bases?.find(o => o.is_default) || optionsGrouped.bases?.[0] || optionsGrouped.base?.[0];
+      const defaultProtein = optionsGrouped.proteins?.[0] || optionsGrouped.protein?.[0];
+      const defaultSide = optionsGrouped.sides?.find(o => o.is_default) || optionsGrouped.sides?.[0] || optionsGrouped.side?.[0];
+      const defaultSpice = optionsGrouped.spices?.find(o => o.is_default) || optionsGrouped.spices?.[1] || optionsGrouped.spice?.[1];
+      const defaultSauce = optionsGrouped.sauces?.find(o => o.is_default) || optionsGrouped.sauces?.[0] || optionsGrouped.sauce?.[0];
+
+      if (defaultBase) setSelectedBaseId(defaultBase.id);
+      if (defaultProtein) setSelectedProteinId(defaultProtein.id);
+      if (defaultSide) setSelectedSideId(defaultSide.id);
+      if (defaultSpice) setSelectedSpiceId(defaultSpice.id);
+      if (defaultSauce) setSelectedSauceId(defaultSauce.id);
     } catch (e) {
       console.error('Build meal data error:', e);
+      setAvailableMeals(FALLBACK_MEALS);
+      setCustomOptions(FALLBACK_CUSTOMIZATION_OPTIONS);
     }
+
   };
 
   // When selectedMealId or options change, fetch live calculation

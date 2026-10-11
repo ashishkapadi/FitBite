@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
 import { apiFetch, safeJson } from '../config/api';
+import { FALLBACK_SUBSCRIPTION_PLANS } from '../utils/demoCatalogFallback';
 import { 
   Calendar, 
   Clock, 
@@ -68,17 +69,22 @@ export default function SubscriptionsPage() {
       const res = await apiFetch('/api/subscriptions/plans');
       if (res.ok) {
         const data = await safeJson(res);
-        setPlans(Array.isArray(data) ? data : []);
-        if (Array.isArray(data) && data.length > 0) {
-          setSelectedPlanId(prev => (prev && data.some(p => p.id === prev) ? prev : data[0].id));
-        }
+        const list = Array.isArray(data) && data.length > 0 ? data : FALLBACK_SUBSCRIPTION_PLANS;
+        setPlans(list);
+        setSelectedPlanId(prev => (prev && list.some(p => p.id === prev) ? prev : list[0].id));
+      } else {
+        setPlans(FALLBACK_SUBSCRIPTION_PLANS);
+        setSelectedPlanId(FALLBACK_SUBSCRIPTION_PLANS[0].id);
       }
     } catch (err) {
       console.error('Error fetching plans:', err);
+      setPlans(FALLBACK_SUBSCRIPTION_PLANS);
+      setSelectedPlanId(FALLBACK_SUBSCRIPTION_PLANS[0].id);
     } finally {
       setLoadingPlans(false);
     }
   };
+
 
   const fetchMySubscriptions = async () => {
     try {

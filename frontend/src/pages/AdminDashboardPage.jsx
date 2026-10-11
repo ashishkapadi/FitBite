@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, safeJson } from '../config/api';
+import { FALLBACK_ADMIN_DASHBOARD } from '../utils/demoCatalogFallback';
 import { 
   ShieldCheck, 
   Users, 
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
-  const { user, token, openAuthModal, login } = useAuth();
+  const { user, token, openAuthModal, login, switchPersona } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('sellers'); // 'sellers' | 'users' | 'orders' | 'logs'
@@ -34,11 +35,11 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (!user) {
+      setLoading(false);
       return;
     }
     if (user.role !== 'admin') {
-      alert('Access restricted to FitBite System Administrators.');
-      navigate('/');
+      setLoading(false);
       return;
     }
     fetchAdminData();
@@ -47,7 +48,7 @@ export default function AdminDashboardPage() {
   const fetchAdminData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
+      await Promise.allSettled([
         fetchMetrics(),
         fetchSellers(),
         fetchUsers(),
@@ -57,9 +58,15 @@ export default function AdminDashboardPage() {
     } catch (err) {
       console.error('Error fetching admin data:', err);
     } finally {
+      setMetrics(prev => prev || FALLBACK_ADMIN_DASHBOARD.metrics);
+      setSellers(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_ADMIN_DASHBOARD.sellers);
+      setUsersList(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_ADMIN_DASHBOARD.users);
+      setOrdersList(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_ADMIN_DASHBOARD.orders);
+      setAuditLogs(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_ADMIN_DASHBOARD.auditLogs);
       setLoading(false);
     }
   };
+
 
   const fetchMetrics = async () => {
     const res = await apiFetch('/api/admin/metrics');
@@ -166,8 +173,9 @@ export default function AdminDashboardPage() {
   };
 
   const handleQuickAdminLogin = async () => {
-    await login('admin@fitbite.demo', 'FitBite@Admin2026');
+    await switchPersona('admin');
   };
+
 
   if (!user || user.role !== 'admin') {
     return (

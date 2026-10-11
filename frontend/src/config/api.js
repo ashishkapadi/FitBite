@@ -12,7 +12,7 @@ const getApiBase = () => {
   // If hosted on Vercel / remote production and VITE_API_BASE_URL wasn't provided at build time,
   // point to the official FitBite Render backend
   if (typeof window !== 'undefined' && window.location.hostname && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
-    return 'https://fitbite.onrender.com/api';
+    return 'https://fitbite-api-21cs.onrender.com/api';
   }
   return '/api';
 };
@@ -59,6 +59,22 @@ export function resolveApiUrl(path) {
 }
 
 /**
+ * Resolves meal and asset image URLs to absolute remote backend URLs when relative
+ */
+export function resolveImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  if (API_BASE_URL.startsWith('http://') || API_BASE_URL.startsWith('https://')) {
+    const backendOrigin = API_BASE_URL.replace(/\/api\/?$/, '');
+    return `${backendOrigin}${cleanPath}`;
+  }
+  return cleanPath;
+}
+
+/**
  * Safely parses response as JSON, checking content-type and detecting non-JSON/HTML/empty bodies.
  * Throws clean, actionable user-facing errors rather than browser "Unexpected end of JSON input".
  */
@@ -101,11 +117,36 @@ export async function safeJson(response) {
   }
 }
 
+import { getFallbackApiResponse } from '../utils/demoCatalogFallback';
+
+// In-memory circuit breaker flag: If remote backend fails once, fast-path subsequent calls
+let isRemoteBackendDown = false;
+
 /**
- * Unified fetch wrapper ensuring remote backend URL prefixing & authorization headers
+ * Allows resetting the backend circuit breaker if needed
+ */
+export function resetBackendCircuitBreaker() {
+  isRemoteBackendDown = false;
+}
+
+/**
+ * Unified fetch wrapper ensuring remote backend URL prefixing, authorization headers,
+ * and resilient client-side fallback responses during network outages or backend cold starts.
  */
 export async function apiFetch(path, options = {}) {
   const url = resolveApiUrl(path);
+
+  // If backend is already known to be down, immediately serve hardcoded data if available
+  if (isRemoteBackendDown && !options.skipFallback) {
+    const fallbackData = getFallbackApiResponse(path, options);
+    if (fallbackData !== null) {
+      return new Response(JSON.stringify(fallbackData), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('fitbite_token') : null;
 
   const headers = {
@@ -122,7 +163,7 @@ export async function apiFetch(path, options = {}) {
     delete headers['Content-Type'];
   }
 
-  const timeoutMs = options.timeout || 15000;
+  const timeoutMs = options.timeout || 3500;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const signal = options.signal || controller.signal;
@@ -135,9 +176,42 @@ export async function apiFetch(path, options = {}) {
       credentials: options.credentials || 'include'
     });
     clearTimeout(timeoutId);
+
+    // If server returned a 5xx gateway error (Render cold start / dead backend)
+    // seamlessly provide fallback system data if available
+    if (!response.ok && response.status >= 500) {
+      isRemoteBackendDown = true;
+      const fallbackData = getFallbackApiResponse(path, options);
+      if (fallbackData !== null) {
+        console.warn(`[apiFetch] Server error ${response.status} at ${url}. Serving offline hardcoded system data.`);
+        return new Response(JSON.stringify(fallbackData), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // Backend is alive and responded normally
+    if (response.ok) {
+      isRemoteBackendDown = false;
+    }
+
     return response;
   } catch (netErr) {
     clearTimeout(timeoutId);
+    isRemoteBackendDown = true;
+
+    // Network timeout, AbortError, or connection refused:
+    // Check if we have hardcoded offline data for this route
+    const fallbackData = getFallbackApiResponse(path, options);
+    if (fallbackData !== null) {
+      console.warn(`[apiFetch] Backend unreachable (${netErr.message}) for ${path}. Serving instant hardcoded system data.`);
+      return new Response(JSON.stringify(fallbackData), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     if (netErr.name === 'AbortError') {
       throw new Error(`Connection timed out after ${timeoutMs / 1000}s while reaching ${url}. Please check your connection and retry.`);
     }
@@ -148,3 +222,4 @@ export async function apiFetch(path, options = {}) {
     );
   }
 }
+

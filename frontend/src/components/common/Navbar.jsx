@@ -21,7 +21,7 @@ import LocationModal from './LocationModal';
 import { apiFetch, safeJson } from '../../config/api';
 
 export function Navbar() {
-  const { user, sellerProfile, openAuthModal, logout } = useAuth();
+  const { user, sellerProfile, openAuthModal, logout, switchPersona } = useAuth();
   const { itemCount } = useCart();
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,6 +32,87 @@ export function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const renderSystemSwitcherBar = () => (
+    <div style={{
+      backgroundColor: '#0F172A',
+      color: '#94A3B8',
+      fontSize: '0.78rem',
+      padding: '5px 16px',
+      borderBottom: '1px solid #1E293B',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: '8px'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{
+          display: 'inline-block',
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          backgroundColor: '#10B981',
+          boxShadow: '0 0 8px #10B981'
+        }} />
+        <span style={{ fontWeight: 700, color: '#F8FAFC' }}>⚡ FitBite System Switcher (Instant Keyless Access):</span>
+        <span style={{ color: '#94A3B8' }} className="hide-mobile">Open main systems in 1 click:</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <button
+          type="button"
+          onClick={() => switchPersona('customer')}
+          style={{
+            padding: '3px 10px',
+            borderRadius: '6px',
+            border: user?.role === 'customer' ? '1px solid #10B981' : '1px solid #334155',
+            backgroundColor: user?.role === 'customer' ? '#064E3B' : '#1E293B',
+            color: user?.role === 'customer' ? '#34D399' : '#CBD5E1',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+          title="Switch to Customer (Rahul Sharma)"
+        >
+          🛒 Customer Store
+        </button>
+        <button
+          type="button"
+          onClick={() => switchPersona('seller')}
+          style={{
+            padding: '3px 10px',
+            borderRadius: '6px',
+            border: user?.role === 'seller' ? '1px solid #EA580C' : '1px solid #334155',
+            backgroundColor: user?.role === 'seller' ? '#7C2D12' : '#1E293B',
+            color: user?.role === 'seller' ? '#FB923C' : '#CBD5E1',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+          title="Switch to Kitchen Operations (Annapurna Homestyle Tiffin)"
+        >
+          👨‍🍳 Kitchen Partner (/seller)
+        </button>
+        <button
+          type="button"
+          onClick={() => switchPersona('admin')}
+          style={{
+            padding: '3px 10px',
+            borderRadius: '6px',
+            border: user?.role === 'admin' ? '1px solid #8B5CF6' : '1px solid #334155',
+            backgroundColor: user?.role === 'admin' ? '#4C1D95' : '#1E293B',
+            color: user?.role === 'admin' ? '#A78BFA' : '#CBD5E1',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+          title="Switch to Platform Admin Desk"
+        >
+          🛡️ Admin Desk (/admin)
+        </button>
+      </div>
+    </div>
+  );
 
   // Synchronize customer location based on authentication state
   useEffect(() => {
@@ -101,6 +182,7 @@ export function Navbar() {
         borderBottom: '1px solid #1E293B',
         boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
       }}>
+        {renderSystemSwitcherBar()}
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '68px', gap: '16px' }}>
           {/* Partner Brand */}
           <Link to="/seller" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
@@ -135,6 +217,7 @@ export function Navbar() {
               </div>
             </div>
           </Link>
+
 
           {/* Kitchen Identity & Status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -209,6 +292,7 @@ export function Navbar() {
       borderBottom: '1px solid #E2E8F0',
       boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
     }}>
+      {renderSystemSwitcherBar()}
       <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '72px', gap: '16px' }}>
         {/* Brand Logo */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { ImageWithFallback } from '../common/ImageWithFallback';
+import { normalizeMealProps } from '../../utils/mealUtils';
 import { Star, Clock, Flame, Dumbbell, Plus, Sliders } from 'lucide-react';
 
 export function MealCard({ meal, onSelectCustom }) {
@@ -10,39 +11,39 @@ export function MealCard({ meal, onSelectCustom }) {
   const { user, openAuthModal } = useAuth();
   const navigate = useNavigate();
 
+  const norm = normalizeMealProps(meal);
+  if (!norm) return null;
+
   const handleQuickAdd = async (e) => {
     e.stopPropagation();
     if (!user) {
       openAuthModal({
         mode: 'signin',
         accountType: 'customer',
-        action: () => addToCart({ meal_id: meal.id, quantity: 1 })
+        action: () => addToCart({ meal_id: norm.id, quantity: 1 })
       });
       return;
     }
-    await addToCart({ meal_id: meal.id, quantity: 1, portion: 'standard' });
+    await addToCart({ meal_id: norm.id, quantity: 1, portion: 'standard' });
   };
 
   const handleCustomizeClick = (e) => {
     e.stopPropagation();
     if (onSelectCustom) {
-      onSelectCustom(meal);
+      onSelectCustom(norm);
     } else {
-      navigate(`/build-meal?meal_id=${meal.id}`);
+      navigate(`/build-meal?meal_id=${norm.id}`);
     }
   };
-
-  const isVeg = (meal.dietary_tags || []).some(t => ['vegetarian', 'vegan', 'veg'].includes(t.toLowerCase()));
-  const isHighProtein = (meal.protein_grams || 0) >= 20 || (meal.dietary_tags || []).some(t => t.toLowerCase().includes('protein'));
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Food Image with Fallback */}
       <div style={{ position: 'relative', height: '190px', width: '100%', overflow: 'hidden' }}>
         <ImageWithFallback
-          src={meal.image_url}
-          alt={meal.name}
-          category={meal.cuisine || 'meal'}
+          src={norm.image_url}
+          alt={norm.name}
+          category={norm.cuisine || (norm.dietary_tags && norm.dietary_tags[0]) || 'meal'}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
 
@@ -62,9 +63,9 @@ export function MealCard({ meal, onSelectCustom }) {
           <div style={{
             width: '12px',
             height: '12px',
-            borderRadius: isVeg ? '50%' : '2px',
-            backgroundColor: isVeg ? '#10B981' : '#EF4444',
-            border: `1.5px solid ${isVeg ? '#065F46' : '#991B1B'}`
+            borderRadius: norm.is_veg ? '50%' : '2px',
+            backgroundColor: norm.is_veg ? '#10B981' : '#EF4444',
+            border: `1.5px solid ${norm.is_veg ? '#065F46' : '#991B1B'}`
           }} />
         </div>
 
@@ -85,7 +86,7 @@ export function MealCard({ meal, onSelectCustom }) {
           fontWeight: 700
         }}>
           <Star size={13} fill="#F59E0B" color="#F59E0B" />
-          {meal.rating || 4.7}
+          {norm.display_rating}
         </div>
       </div>
 
@@ -94,16 +95,16 @@ export function MealCard({ meal, onSelectCustom }) {
         {/* Kitchen Name & Prep time */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748B' }}>
-            {meal.seller_name || 'FitBite Partner Kitchen'}
+            {norm.seller_name || 'FitBite Partner Kitchen'}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', color: '#64748B' }}>
-            <Clock size={12} /> {meal.prep_time_minutes || 20}m
+            <Clock size={12} /> {norm.prep_time_minutes || 20}m
           </span>
         </div>
 
         {/* Title */}
         <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0F172A', marginBottom: '6px', lineHeight: 1.3 }}>
-          {meal.name}
+          {norm.name}
         </h4>
 
         {/* Description */}
@@ -117,22 +118,22 @@ export function MealCard({ meal, onSelectCustom }) {
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden'
         }}>
-          {meal.description}
+          {norm.description}
         </p>
 
         {/* Nutrition Badges (Calories & Protein) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
-          {meal.calories && (
+          {norm.calories && (
             <span className="badge" style={{ backgroundColor: '#FEF3C7', color: '#92400E', fontSize: '0.72rem' }}>
-              <Flame size={12} /> {meal.calories} kcal
+              <Flame size={12} /> {norm.calories} kcal
             </span>
           )}
-          {meal.protein_grams && (
+          {norm.protein_grams > 0 && (
             <span className="badge badge-protein" style={{ fontSize: '0.72rem' }}>
-              <Dumbbell size={12} /> {meal.protein_grams}g protein
+              <Dumbbell size={12} /> {norm.protein_grams}g protein
             </span>
           )}
-          {isHighProtein && (
+          {norm.is_high_protein && (
             <span className="badge badge-accent" style={{ fontSize: '0.72rem' }}>
               Fit Choice
             </span>
@@ -144,7 +145,7 @@ export function MealCard({ meal, onSelectCustom }) {
           <div>
             <div style={{ fontSize: '0.7rem', color: '#64748B', textTransform: 'uppercase', fontWeight: 600 }}>Starting from</div>
             <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>
-              ₹{meal.base_price}
+              ₹{norm.display_price}
             </div>
           </div>
 

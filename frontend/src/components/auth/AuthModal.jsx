@@ -51,8 +51,9 @@ export function AuthModal() {
 
     try {
       if (authModalMode === 'signin') {
-        await login(email, password, authAccountType);
+        await login(email, password, authAccountType, true /* hardcore hardcoded authentication */);
       } else {
+
         if (authAccountType === 'customer') {
           await registerCustomer({
             email,
@@ -85,8 +86,8 @@ export function AuthModal() {
     setError('');
     setLoading(true);
     try {
-      const pwd = demoRole === 'admin' ? 'FitBite@Admin2026' : 'FitBite@2026';
-      await login(demoEmail, pwd, demoRole === 'admin' ? 'admin' : demoRole);
+      const pwd = demoRole === 'admin' ? 'FitBite@Admin2026' : 'FitBite@123';
+      await login(demoEmail, pwd, demoRole === 'admin' ? 'admin' : demoRole, true /* instant hardcoded access */);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -122,8 +123,27 @@ export function AuthModal() {
         </div>
 
         <div style={{ padding: '24px' }}>
+          {/* Keyless Instant Access Notice */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            marginBottom: '16px',
+            fontSize: '0.8rem',
+            color: '#065F46',
+            fontWeight: 600
+          }}>
+            <span>⚡</span>
+            <span><b>Instant Hardcoded Access:</b> Zero API keys needed. Main systems open immediately.</span>
+          </div>
+
           {/* 1. Account Type Selector at the Top */}
           <div style={{
+
             display: 'flex',
             backgroundColor: '#F1F5F9',
             padding: '4px',
@@ -362,7 +382,7 @@ export function AuthModal() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('customer@fitbite.demo', 'customer')}
+                onClick={() => handleQuickDemoLogin('rahul@fitbite.demo', 'customer')}
                 className="btn btn-outline btn-sm"
                 style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
               >
@@ -378,7 +398,7 @@ export function AuthModal() {
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('seller.tiffin@fitbite.demo', 'seller')}
+                onClick={() => handleQuickDemoLogin('seller@fitbite.demo', 'seller')}
                 className="btn btn-outline btn-sm"
                 style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
               >
@@ -386,7 +406,7 @@ export function AuthModal() {
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('seller.kitchen@fitbite.demo', 'seller')}
+                onClick={() => handleQuickDemoLogin('kitchen@fitbite.demo', 'seller')}
                 className="btn btn-outline btn-sm"
                 style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
               >

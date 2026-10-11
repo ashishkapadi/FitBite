@@ -123,6 +123,7 @@ app.use('/images', express.static(publicUploadsDir, { maxAge: '7d' }));
 // System Health Endpoints (Root and /api/health for PaaS probes like Render, Railway, AWS ECS)
 const healthHandler = (req, res) => {
   res.json({
+    ok: true,
     status: 'UP',
     service: 'fitbite-backend',
     database_mode: db.getMode(),

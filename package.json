@@ -19,5 +19,8 @@
     "mysql"
   ],
   "author": "FitBite Engineering",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "playwright": "^1.64.0"
+  }
 }
