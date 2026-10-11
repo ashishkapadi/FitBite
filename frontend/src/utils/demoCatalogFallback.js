@@ -494,6 +494,33 @@ export const FALLBACK_ORDERS = [
 
 export const FALLBACK_SELLER_DASHBOARD = {
   overview: {
+    seller: {
+      id: 'seller_01',
+      business_name: 'Annapurna Homestyle Tiffin Ghar',
+      owner_name: 'Savitri Bai Deshmukh',
+      kitchen_type: 'commercial_tiffin',
+      delivery_model: 'fixed_route_batch',
+      operating_address: '24/1, 2nd Main, HAL 2nd Stage, Indiranagar',
+      area: 'Indiranagar',
+      city: 'Bengaluru',
+      pincodes_served: ['560038', '560008', '560075', '560001'],
+      delivery_radius_km: 8,
+      cuisine_specializations: ['Everyday Tiffins', 'North Indian', 'Maharashtrian'],
+      fssai_number: '11223344556677',
+      verification_status: 'approved',
+      is_listed: true,
+      rating: 4.85,
+      rating_count: 240
+    },
+    stats: {
+      total_orders_count: 240,
+      today_orders_count: 42,
+      active_kitchen_tickets: 3,
+      active_subscriptions_count: 68,
+      today_subscription_lunches: 48,
+      today_subscription_dinners: 36,
+      total_revenue_inr: 84600.00
+    },
     today_orders_count: 42,
     active_subscriptions_count: 68,
     today_revenue: 8460,
@@ -595,6 +622,42 @@ export const FALLBACK_SELLER_DASHBOARD = {
     slot: 'lunch',
     date: new Date().toISOString().split('T')[0],
     total_tiffins: 48,
+    grouped_by_area: {
+      'Indiranagar': [
+        {
+          customer_name: 'Rahul Sharma',
+          subscription_number: 'SUB-2026-8801',
+          street_address: 'Flat 402, Green Glen Layout, 5th Cross',
+          pincode: '560038',
+          meal_name: 'Classic Daily Homestyle Tiffin Dabba',
+          quantity: 2,
+          delivery_slot: 'lunch',
+          special_instructions: 'Steel Dabba Exchange'
+        },
+        {
+          customer_name: 'Amitabh Sengupta',
+          subscription_number: 'SUB-2026-8809',
+          street_address: '14, 1st Cross, HAL 2nd Stage',
+          pincode: '560038',
+          meal_name: 'Special Paneer Subzi Tiffin Meal',
+          quantity: 1,
+          delivery_slot: 'lunch',
+          special_instructions: 'Leave at security'
+        }
+      ],
+      'Domlur & EGL': [
+        {
+          customer_name: 'Sneha Rao',
+          subscription_number: 'SUB-2026-8814',
+          street_address: 'Tower B, Embassy Golf Links',
+          pincode: '560071',
+          meal_name: 'Classic Daily Homestyle Tiffin Dabba',
+          quantity: 1,
+          delivery_slot: 'lunch',
+          special_instructions: 'Ring bell twice'
+        }
+      ]
+    },
     delivery_batches: [
       {
         batch_id: 'batch_indiranagar_01',
@@ -622,11 +685,21 @@ export const FALLBACK_SELLER_DASHBOARD = {
     ]
   },
   earnings: {
+    summary: {
+      gross_revenue: 168400,
+      platform_fee_percent: 10,
+      net_payout: 151560
+    },
     total_revenue: 168400,
     platform_commission: 16840,
     net_payout: 151560,
     pending_payout: 18450,
     settlement_status: 'On-schedule (Next cycle tomorrow 10:00 AM)',
+    recent_orders: [
+      { id: 'ord_kitch_01', order_number: 'FB-2026-9012', grand_total: 275.00, created_at: new Date(Date.now() - 25 * 60 * 1000).toISOString() },
+      { id: 'ord_kitch_02', order_number: 'FB-2026-9015', grand_total: 340.00, created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString() },
+      { id: 'ord_kitch_03', order_number: 'FB-2026-8998', grand_total: 155.00, created_at: new Date(Date.now() - 40 * 60 * 1000).toISOString() }
+    ],
     recent_transactions: [
       { id: 'txn_01', date: '2026-10-10', amount: 8940, type: 'Credit (Daily Batch Settlement)', status: 'settled' },
       { id: 'txn_02', date: '2026-10-09', amount: 8420, type: 'Credit (Daily Batch Settlement)', status: 'settled' },
@@ -635,23 +708,30 @@ export const FALLBACK_SELLER_DASHBOARD = {
   },
   settings: {
     business_name: 'Annapurna Homestyle Tiffin Ghar',
+    area: 'Indiranagar',
+    operating_hours: '07:00 AM - 10:00 PM',
     operating_address: '24/1, 2nd Main, HAL 2nd Stage, Indiranagar',
+    preparation_cutoff_lunch_time: '08:30:00',
+    preparation_cutoff_dinner_time: '16:00:00',
     fssai_number: '11223344556677',
     is_accepting_orders: true,
-    auto_accept_subscriptions: true,
-    cutoff_lunch: '08:30:00',
-    cutoff_dinner: '16:00:00'
+    auto_accept_subscriptions: true
   }
 };
 
 export const FALLBACK_ADMIN_DASHBOARD = {
   metrics: {
-    total_users: 1840,
-    active_kitchens: 14,
-    pending_verifications: 2,
-    total_orders: 12480,
+    platform_gross_merchandise_value_inr: 1894200,
     platform_gmv: 1894200,
-    active_subscriptions: 420
+    pending_verification_sellers: 2,
+    pending_verifications: 2,
+    approved_sellers_count: 14,
+    active_kitchens: 14,
+    total_orders_count: 12480,
+    total_orders: 12480,
+    active_subscriptions_count: 420,
+    active_subscriptions: 420,
+    total_users: 1840
   },
   sellers: [
     {
