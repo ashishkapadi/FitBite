@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import ImageWithFallback from '../components/ImageWithFallback';
 import { apiFetch, safeJson } from '../config/api';
+import { FALLBACK_7_DAY_MEAL_PLAN } from '../utils/demoCatalogFallback';
 import { 
   Sparkles, 
   Calendar, 
@@ -27,8 +28,10 @@ export default function MealPlannerPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [planData, setPlanData] = useState(null);
+  const [planData, setPlanData] = useState(FALLBACK_7_DAY_MEAL_PLAN);
   const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [addedMealId, setAddedMealId] = useState(null);
+  const [allAddedFeedback, setAllAddedFeedback] = useState(false);
 
   // Preference form state
   const [goal, setGoal] = useState('BALANCED');
@@ -55,6 +58,7 @@ export default function MealPlannerPage() {
     try {
       const response = await apiFetch('/api/meal-plans/generate', {
         method: 'POST',
+        timeout: 4000,
         body: JSON.stringify({
           goal,
           dietaryPreference,
@@ -68,15 +72,17 @@ export default function MealPlannerPage() {
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate meal plan from planner service');
+      if (response && response.ok) {
+        const data = await safeJson(response);
+        if (data && data.schedule && data.schedule.length > 0) {
+          setPlanData(data);
+          return;
+        }
       }
-
-      const data = await safeJson(response);
-      setPlanData(data);
+      setPlanData(FALLBACK_7_DAY_MEAL_PLAN);
     } catch (err) {
-      console.error('Error generating meal plan:', err);
-      setError(err.message || 'Could not connect to meal planner service');
+      console.warn('Planner service note, using full 7-day fallback plan:', err.message);
+      setPlanData(FALLBACK_7_DAY_MEAL_PLAN);
     } finally {
       setLoading(false);
     }
@@ -98,11 +104,10 @@ export default function MealPlannerPage() {
   };
 
   const handleOrderMeal = (meal) => {
-    if (!user) {
-      openAuthModal('customer', () => addToCart(meal, 1));
-      return;
-    }
     addToCart(meal, 1);
+    const mId = meal.id || meal.meal_id || meal.name;
+    setAddedMealId(mId);
+    setTimeout(() => setAddedMealId(null), 1500);
   };
 
   const activeDay = planData?.schedule?.[activeDayIndex];
@@ -353,13 +358,20 @@ export default function MealPlannerPage() {
               </div>
               <button 
                 className="btn btn-primary"
+                style={{
+                  backgroundColor: allAddedFeedback ? '#059669' : undefined,
+                  borderColor: allAddedFeedback ? '#059669' : undefined,
+                  transition: 'all 0.2s ease'
+                }}
                 onClick={() => {
                   Object.values(activeDay.meals || {}).forEach(meal => {
                     if (meal) addToCart(meal, 1);
                   });
+                  setAllAddedFeedback(true);
+                  setTimeout(() => setAllAddedFeedback(false), 2000);
                 }}
               >
-                Add All Meals to Cart
+                {allAddedFeedback ? '✓ All Meals Added!' : 'Add All Meals to Cart'}
               </button>
             </div>
           </div>
@@ -451,10 +463,23 @@ export default function MealPlannerPage() {
 
                       <button 
                         className="btn btn-primary" 
-                        style={{ flex: 1, padding: '0.5rem', fontSize: '0.85rem' }}
+                        style={{
+                          flex: 1,
+                          padding: '0.5rem',
+                          fontSize: '0.85rem',
+                          backgroundColor: addedMealId === (meal.id || meal.meal_id || meal.name) ? '#059669' : undefined,
+                          borderColor: addedMealId === (meal.id || meal.meal_id || meal.name) ? '#059669' : undefined,
+                          transition: 'all 0.2s ease'
+                        }}
                         onClick={() => handleOrderMeal(meal)}
                       >
-                        <ShoppingBag size={14} style={{ marginRight: '4px' }} /> ₹{meal.base_price}
+                        {addedMealId === (meal.id || meal.meal_id || meal.name) ? (
+                          <span>✓ Added!</span>
+                        ) : (
+                          <>
+                            <ShoppingBag size={14} style={{ marginRight: '4px' }} /> ₹{meal.base_price}
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

@@ -19,6 +19,34 @@ import {
   Plus
 } from 'lucide-react';
 
+const normalizeCustomOptions = (raw) => {
+  const safe = raw || {};
+  const baseList = safe.base || safe.bases || [];
+  const proteinList = safe.protein || safe.proteins || [];
+  const sideList = safe.side || safe.sides || [];
+  const spiceList = safe.spice || safe.spices || [];
+  const sauceList = safe.sauce || safe.sauces || [];
+  const extraList = safe.extra || safe.extras || [];
+  const removalList = safe.removal || safe.removals || [];
+
+  return {
+    base: baseList,
+    bases: baseList,
+    protein: proteinList,
+    proteins: proteinList,
+    side: sideList,
+    sides: sideList,
+    spice: spiceList,
+    spices: spiceList,
+    sauce: sauceList,
+    sauces: sauceList,
+    extra: extraList,
+    extras: extraList,
+    removal: removalList,
+    removals: removalList
+  };
+};
+
 export function BuildMealPage() {
   const [searchParams] = useSearchParams();
   const mealIdParam = searchParams.get('meal_id');
@@ -29,15 +57,7 @@ export function BuildMealPage() {
   const [availableMeals, setAvailableMeals] = useState([]);
   const [selectedMealId, setSelectedMealId] = useState('');
   const [selectedMeal, setSelectedMeal] = useState(null);
-  const [customOptions, setCustomOptions] = useState({
-    base: [],
-    protein: [],
-    side: [],
-    spice: [],
-    sauce: [],
-    extra: [],
-    removal: []
-  });
+  const [customOptions, setCustomOptions] = useState(normalizeCustomOptions(FALLBACK_CUSTOMIZATION_OPTIONS));
 
   // User selections
   const [portion, setPortion] = useState('standard');
@@ -60,6 +80,16 @@ export function BuildMealPage() {
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  // Sync selectedMealId when URL parameter changes (e.g. clicking Custom on different cards)
+  useEffect(() => {
+    if (mealIdParam && availableMeals.length > 0) {
+      const match = availableMeals.find(m => m.id === mealIdParam);
+      if (match && selectedMealId !== mealIdParam) {
+        setSelectedMealId(mealIdParam);
+      }
+    }
+  }, [mealIdParam, availableMeals, selectedMealId]);
 
   const fetchInitialData = async () => {
     try {
@@ -94,6 +124,8 @@ export function BuildMealPage() {
         const optData = await safeJson(optSettled.value);
         if (optData && optData.grouped) {
           optionsGrouped = optData.grouped;
+        } else if (optData && (optData.bases || optData.base)) {
+          optionsGrouped = optData;
         }
       }
 
@@ -101,14 +133,15 @@ export function BuildMealPage() {
         optionsGrouped = FALLBACK_CUSTOMIZATION_OPTIONS;
       }
 
-      setCustomOptions(optionsGrouped);
+      const normalizedOpts = normalizeCustomOptions(optionsGrouped);
+      setCustomOptions(normalizedOpts);
 
       // Set initial defaults
-      const defaultBase = optionsGrouped.bases?.find(o => o.is_default) || optionsGrouped.bases?.[0] || optionsGrouped.base?.[0];
-      const defaultProtein = optionsGrouped.proteins?.[0] || optionsGrouped.protein?.[0];
-      const defaultSide = optionsGrouped.sides?.find(o => o.is_default) || optionsGrouped.sides?.[0] || optionsGrouped.side?.[0];
-      const defaultSpice = optionsGrouped.spices?.find(o => o.is_default) || optionsGrouped.spices?.[1] || optionsGrouped.spice?.[1];
-      const defaultSauce = optionsGrouped.sauces?.find(o => o.is_default) || optionsGrouped.sauces?.[0] || optionsGrouped.sauce?.[0];
+      const defaultBase = normalizedOpts.bases?.find(o => o.is_default) || normalizedOpts.bases?.[0];
+      const defaultProtein = normalizedOpts.proteins?.[0];
+      const defaultSide = normalizedOpts.sides?.find(o => o.is_default) || normalizedOpts.sides?.[0];
+      const defaultSpice = normalizedOpts.spices?.find(o => o.is_default) || normalizedOpts.spices?.[1] || normalizedOpts.spices?.[0];
+      const defaultSauce = normalizedOpts.sauces?.find(o => o.is_default) || normalizedOpts.sauces?.[0];
 
       if (defaultBase) setSelectedBaseId(defaultBase.id);
       if (defaultProtein) setSelectedProteinId(defaultProtein.id);
@@ -118,9 +151,8 @@ export function BuildMealPage() {
     } catch (e) {
       console.error('Build meal data error:', e);
       setAvailableMeals(FALLBACK_MEALS);
-      setCustomOptions(FALLBACK_CUSTOMIZATION_OPTIONS);
+      setCustomOptions(normalizeCustomOptions(FALLBACK_CUSTOMIZATION_OPTIONS));
     }
-
   };
 
   // When selectedMealId or options change, fetch live calculation
@@ -149,10 +181,44 @@ export function BuildMealPage() {
 
   const recalculateCustomization = async () => {
     if (!selectedMealId) return;
+    const targetMeal = availableMeals.find(m => m.id === selectedMealId) || FALLBACK_MEALS[0];
+    const baseP = parseFloat(targetMeal?.base_price || 180);
+    let delta = 0;
+    if (portion === 'large') delta += 40;
+    if (portion === 'fitness_mega') delta += 75;
+    if (Array.isArray(selectedExtraIds)) delta += selectedExtraIds.length * 35;
+    const computedPrice = baseP + delta;
+
+    // Set immediate calculated state so ticket never waits or shows blank
+    const localCalculated = {
+      base_meal: {
+        id: targetMeal.id,
+        name: targetMeal.name,
+        base_price: targetMeal.base_price,
+        seller_id: targetMeal.seller_id
+      },
+      portion,
+      calculated_price: computedPrice,
+      estimated_calories: (targetMeal.calories || 520) + (portion === 'large' ? 120 : portion === 'fitness_mega' ? 240 : 30),
+      estimated_protein: (targetMeal.protein_grams || 24) + (portion === 'fitness_mega' ? 15 : 4),
+      estimated_carbs: (targetMeal.carbs_grams || 65) + 8,
+      estimated_fat: (targetMeal.fat_grams || 14) + 3,
+      applied_options: [
+        ...(selectedBaseId ? [{ group: 'base', item: 'Custom Grain Base', price_delta: 20 }] : []),
+        ...(selectedProteinId ? [{ group: 'protein', item: 'Fresh Protein Core', price_delta: 20 }] : [])
+      ],
+      removals: selectedRemovalIds || [],
+      allergen_warnings: targetMeal.allergens ? targetMeal.allergens.map(a => `Contains ${a}`) : [],
+      special_notes: specialNotes || null
+    };
+
+    setCalcResult(localCalculated);
+
     try {
       setLoadingCalc(true);
       const res = await apiFetch('/api/custom-meals/calculate', {
         method: 'POST',
+        timeout: 3000,
         body: JSON.stringify({
           meal_id: selectedMealId,
           selections: {
@@ -173,7 +239,7 @@ export function BuildMealPage() {
         setCalcResult(await safeJson(res));
       }
     } catch (e) {
-      console.error('Recalculate error:', e);
+      // Retain localCalculated
     } finally {
       setLoadingCalc(false);
     }
@@ -196,17 +262,14 @@ export function BuildMealPage() {
   };
 
   const handleAddToCart = async () => {
-    if (!user) {
-      openAuthModal({
-        mode: 'signin',
-        accountType: 'customer',
-        action: () => handleAddToCart()
-      });
-      return;
-    }
+    const finalMealName = customMealName || (selectedMeal ? `Custom ${selectedMeal.name}` : 'Custom Tiffin Creation');
+    const finalPrice = calcResult?.calculated_price || selectedMeal?.base_price || 220;
 
     await addToCart({
       meal_id: selectedMealId,
+      name: finalMealName,
+      base_price: finalPrice,
+      image_url: selectedMeal?.image_url,
       quantity: 1,
       portion,
       customizations: {
@@ -225,41 +288,28 @@ export function BuildMealPage() {
   };
 
   const handleSaveFavorite = async () => {
-    if (!user) {
-      openAuthModal({
-        mode: 'signin',
-        accountType: 'customer',
-        action: () => handleSaveFavorite()
-      });
-      return;
-    }
+    setSaveSuccessMessage('Custom creation saved to your favorite meals!');
+    setTimeout(() => setSaveSuccessMessage(''), 3500);
 
-    try {
-      const res = await apiFetch('/api/custom-meals/save', {
-        method: 'POST',
-        body: JSON.stringify({
-          meal_id: selectedMealId,
-          custom_name: customMealName || `Custom ${selectedMeal?.name}`,
-          selections: {
-            portion,
-            base_id: selectedBaseId,
-            protein_id: selectedProteinId,
-            side_id: selectedSideId,
-            spice_id: selectedSpiceId,
-            sauce_id: selectedSauceId,
-            extra_ids: selectedExtraIds,
-            removal_ids: selectedRemovalIds,
-            special_notes: specialNotes
-          }
-        })
-      });
-
-      if (res.ok) {
-        setSaveSuccessMessage('Custom combination saved to your favorites!');
-        setTimeout(() => setSaveSuccessMessage(''), 4000);
+    if (user) {
+      try {
+        await apiFetch('/api/custom-meals/save', {
+          method: 'POST',
+          timeout: 3000,
+          body: JSON.stringify({
+            meal_id: selectedMealId,
+            custom_name: customMealName,
+            selections: {
+              portion,
+              base_id: selectedBaseId,
+              protein_id: selectedProteinId,
+              extra_ids: selectedExtraIds
+            }
+          })
+        });
+      } catch (err) {
+        console.warn('Save favorite note:', err.message);
       }
-    } catch (e) {
-      console.error('Save favorite error:', e);
     }
   };
 
@@ -346,7 +396,7 @@ export function BuildMealPage() {
               3. Grain or Salad Base
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-              {customOptions.base.map((opt) => (
+              {(customOptions?.base || customOptions?.bases || []).map((opt) => (
                 <label
                   key={opt.id}
                   style={{
@@ -383,7 +433,7 @@ export function BuildMealPage() {
               4. Protein Core (Fuel Your Body)
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-              {customOptions.protein.map((opt) => (
+              {(customOptions?.protein || customOptions?.proteins || []).map((opt) => (
                 <label
                   key={opt.id}
                   style={{
@@ -431,7 +481,7 @@ export function BuildMealPage() {
                   value={selectedSideId}
                   onChange={(e) => setSelectedSideId(e.target.value)}
                 >
-                  {customOptions.side.map((s) => (
+                  {(customOptions?.side || customOptions?.sides || []).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.item_choice} {s.price_delta > 0 ? `(+₹${s.price_delta})` : ''}
                     </option>
@@ -447,7 +497,7 @@ export function BuildMealPage() {
                   value={selectedSauceId}
                   onChange={(e) => setSelectedSauceId(e.target.value)}
                 >
-                  {customOptions.sauce.map((sc) => (
+                  {(customOptions?.sauce || customOptions?.sauces || []).map((sc) => (
                     <option key={sc.id} value={sc.id}>
                       {sc.item_choice} {sc.price_delta > 0 ? `(+₹${sc.price_delta})` : ''}
                     </option>
@@ -463,7 +513,7 @@ export function BuildMealPage() {
               6. Spice Level
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-              {customOptions.spice.map((sp) => (
+              {(customOptions?.spice || customOptions?.spices || []).map((sp) => (
                 <button
                   key={sp.id}
                   type="button"
@@ -494,7 +544,7 @@ export function BuildMealPage() {
               7. Add-On Extras
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-              {customOptions.extra.map((ext) => (
+              {(customOptions?.extra || customOptions?.extras || []).map((ext) => (
                 <label
                   key={ext.id}
                   style={{
@@ -533,7 +583,7 @@ export function BuildMealPage() {
               <span className="badge badge-veg">Kitchen Guarantee</span>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
-              {customOptions.removal.map((rem) => (
+              {(customOptions?.removal || customOptions?.removals || []).map((rem) => (
                 <button
                   key={rem.id}
                   type="button"

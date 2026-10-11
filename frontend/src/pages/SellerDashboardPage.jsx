@@ -90,14 +90,6 @@ export default function SellerDashboardPage() {
   const [manifestDate, setManifestDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    if (user.role !== 'seller' && user.role !== 'admin') {
-      setLoading(false);
-      return;
-    }
     fetchAllSellerData();
   }, [user]);
 
@@ -393,48 +385,6 @@ export default function SellerDashboardPage() {
     }
   };
 
-  if (!user) {
-    return (
-      <div style={{ maxWidth: '600px', margin: '4rem auto', textAlign: 'center', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <ChefHat size={48} color="#EA580C" style={{ margin: '0 auto 1rem' }} />
-        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
-          Partner Kitchen Operations Desk
-        </h2>
-        <p style={{ color: '#64748B', margin: '0 0 1.5rem', lineHeight: '1.5' }}>
-          Zero API keys required. Instant hardcoded access enabled for Kitchen Operations, live incoming orders, and daily dispatch manifests.
-        </p>
-        <button
-          className="btn btn-accent"
-          onClick={() => switchPersona('seller')}
-          style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', fontWeight: 700 }}
-        >
-          👨‍🍳 1-Click Open Kitchen Dashboard (Annapurna)
-        </button>
-      </div>
-    );
-  }
-
-  if (user.role !== 'seller' && user.role !== 'admin') {
-    return (
-      <div style={{ maxWidth: '600px', margin: '4rem auto', textAlign: 'center', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <ChefHat size={48} color="#EA580C" style={{ margin: '0 auto 1rem' }} />
-        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
-          Kitchen Operations &amp; Partner Portal
-        </h2>
-        <p style={{ color: '#64748B', margin: '0 0 1.5rem', lineHeight: '1.5' }}>
-          You are currently signed in as <b>{user.full_name}</b> ({user.role}). Switch to our verified partner kitchen (Annapurna Homestyle Tiffin Ghar) to manage daily orders, batch manifests, and menus.
-        </p>
-        <button
-          className="btn btn-accent"
-          onClick={() => switchPersona('seller')}
-          style={{ padding: '0.75rem 1.75rem', fontSize: '1rem', fontWeight: 700 }}
-        >
-          👨‍🍳 1-Click Switch to Kitchen Partner (Annapurna)
-        </button>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div style={{ maxWidth: '800px', margin: '5rem auto', textAlign: 'center' }}>
@@ -536,6 +486,43 @@ export default function SellerDashboardPage() {
 
       {/* 2. Main Work Area */}
       <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
+        {(!user || user.role !== 'seller') && (
+          <div style={{
+            backgroundColor: '#FFF7ED',
+            border: '1.5px solid #FDBA74',
+            borderRadius: '12px',
+            padding: '12px 20px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.3rem' }}>👨‍🍳</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#9A3412' }}>
+                  Kitchen Operations Portal • Annapurna Homestyle Tiffin Ghar
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#C2410C' }}>
+                  Instant access enabled. Live order milestones, batch dispatch manifest &amp; menu controls are active.
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => switchPersona('customer')}
+                style={{ fontSize: '0.78rem', padding: '5px 12px', borderColor: '#EA580C', color: '#EA580C' }}
+              >
+                🛒 Customer Store
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Verification Status Banner for Pending/Rejected Sellers */}
         {!isApproved && (
           <div style={{

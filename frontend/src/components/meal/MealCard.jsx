@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -10,21 +10,23 @@ export function MealCard({ meal, onSelectCustom }) {
   const { addToCart } = useCart();
   const { user, openAuthModal } = useAuth();
   const navigate = useNavigate();
+  const [addedFeedback, setAddedFeedback] = useState(false);
 
   const norm = normalizeMealProps(meal);
   if (!norm) return null;
 
   const handleQuickAdd = async (e) => {
     e.stopPropagation();
-    if (!user) {
-      openAuthModal({
-        mode: 'signin',
-        accountType: 'customer',
-        action: () => addToCart({ meal_id: norm.id, quantity: 1 })
-      });
-      return;
-    }
-    await addToCart({ meal_id: norm.id, quantity: 1, portion: 'standard' });
+    await addToCart({
+      meal_id: norm.id,
+      name: norm.name,
+      base_price: norm.base_price,
+      image_url: norm.image_url,
+      quantity: 1,
+      portion: 'standard'
+    });
+    setAddedFeedback(true);
+    setTimeout(() => setAddedFeedback(false), 1500);
   };
 
   const handleCustomizeClick = (e) => {
@@ -166,9 +168,15 @@ export function MealCard({ meal, onSelectCustom }) {
               onClick={handleQuickAdd}
               className="btn btn-primary btn-sm"
               title="Quick Add standard meal to cart"
-              style={{ padding: '6px 12px', borderRadius: '8px' }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                backgroundColor: addedFeedback ? '#10B981' : undefined,
+                borderColor: addedFeedback ? '#10B981' : undefined,
+                transition: 'all 0.2s ease'
+              }}
             >
-              <Plus size={16} /> Add
+              {addedFeedback ? '✓ Added' : <><Plus size={16} /> Add</>}
             </button>
           </div>
         </div>

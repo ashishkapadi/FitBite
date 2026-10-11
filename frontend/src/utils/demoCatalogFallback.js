@@ -341,44 +341,65 @@ export const FALLBACK_MEALS = [
   }
 ];
 
+const fallbackBases = [
+  { id: 'opt_base_01', name: 'Base Choice', group_type: 'base', item_choice: 'Steamed Basmati Rice', price_delta: 0.00, calorie_delta: 180, protein_delta: 3.5, carbs_delta: 38.0, fat_delta: 0.5, is_default: true, display_order: 1 },
+  { id: 'opt_base_02', name: 'Base Choice', group_type: 'base', item_choice: 'Brown Rice', price_delta: 20.00, calorie_delta: 165, protein_delta: 4.0, carbs_delta: 34.0, fat_delta: 1.2, is_default: false, display_order: 2 },
+  { id: 'opt_base_03', name: 'Base Choice', group_type: 'base', item_choice: 'Multigrain Phulka (3 Pcs)', price_delta: 15.00, calorie_delta: 195, protein_delta: 6.2, carbs_delta: 36.0, fat_delta: 1.5, is_default: false, display_order: 3 },
+  { id: 'opt_base_04', name: 'Base Choice', group_type: 'base', item_choice: 'Foxtail Millet Khichdi', price_delta: 25.00, calorie_delta: 150, protein_delta: 5.0, carbs_delta: 28.0, fat_delta: 1.0, is_default: false, display_order: 4 }
+];
+
+const fallbackProteins = [
+  { id: 'opt_prot_01', name: 'Protein Core', group_type: 'protein', item_choice: 'Fresh Malai Paneer Cubes (120g)', price_delta: 45.00, calorie_delta: 260, protein_delta: 18.5, carbs_delta: 4.0, fat_delta: 18.0, is_default: false, display_order: 1 },
+  { id: 'opt_prot_02', name: 'Protein Core', group_type: 'protein', item_choice: 'Organic Spiced Tofu (130g)', price_delta: 40.00, calorie_delta: 180, protein_delta: 16.0, carbs_delta: 3.0, fat_delta: 10.0, is_default: false, display_order: 2 },
+  { id: 'opt_prot_03', name: 'Protein Core', group_type: 'protein', item_choice: 'Two Farm Boiled Eggs', price_delta: 35.00, calorie_delta: 145, protein_delta: 13.0, carbs_delta: 1.0, fat_delta: 9.5, is_default: false, display_order: 3 },
+  { id: 'opt_prot_04', name: 'Protein Core', group_type: 'protein', item_choice: 'Grilled Herb Chicken Breast (140g)', price_delta: 65.00, calorie_delta: 210, protein_delta: 27.0, carbs_delta: 0.0, fat_delta: 4.5, is_default: false, display_order: 4 }
+];
+
+const fallbackSides = [
+  { id: 'opt_side_01', name: 'Side Vegetable', group_type: 'side', item_choice: 'Roasted Seasonal Vegetables', price_delta: 0.00, calorie_delta: 75, protein_delta: 2.5, carbs_delta: 11.0, fat_delta: 1.5, is_default: true, display_order: 1 },
+  { id: 'opt_side_02', name: 'Side Vegetable', group_type: 'side', item_choice: 'Homestyle Bhindi Masala', price_delta: 15.00, calorie_delta: 85, protein_delta: 2.0, carbs_delta: 10.0, fat_delta: 3.5, is_default: false, display_order: 2 },
+  { id: 'opt_side_03', name: 'Side Vegetable', group_type: 'side', item_choice: 'Steamed Broccoli & French Beans', price_delta: 25.00, calorie_delta: 55, protein_delta: 3.5, carbs_delta: 7.0, fat_delta: 0.5, is_default: false, display_order: 3 }
+];
+
+const fallbackSpices = [
+  { id: 'opt_spc_01', name: 'Spice Level', group_type: 'spice', item_choice: 'Mild (Low Chili, Fragrant)', price_delta: 0.00, calorie_delta: 0, protein_delta: 0.0, carbs_delta: 0.0, fat_delta: 0.0, is_default: false, display_order: 1 },
+  { id: 'opt_spc_02', name: 'Spice Level', group_type: 'spice', item_choice: 'Medium (Balanced Indian Spicing)', price_delta: 0.00, calorie_delta: 0, protein_delta: 0.0, carbs_delta: 0.0, fat_delta: 0.0, is_default: true, display_order: 2 },
+  { id: 'opt_spc_03', name: 'Spice Level', group_type: 'spice', item_choice: 'Hot (Extra Green Chilies)', price_delta: 0.00, calorie_delta: 5, protein_delta: 0.0, carbs_delta: 1.0, fat_delta: 0.0, is_default: false, display_order: 3 }
+];
+
+const fallbackSauces = [
+  { id: 'opt_sau_01', name: 'Curry / Sauce', group_type: 'sauce', item_choice: 'Yellow Tadka Dal', price_delta: 0.00, calorie_delta: 110, protein_delta: 6.0, carbs_delta: 15.0, fat_delta: 2.5, is_default: true, display_order: 1 },
+  { id: 'opt_sau_02', name: 'Curry / Sauce', group_type: 'sauce', item_choice: 'Velvety Makhani Gravy', price_delta: 25.00, calorie_delta: 160, protein_delta: 3.5, carbs_delta: 10.0, fat_delta: 11.0, is_default: false, display_order: 2 },
+  { id: 'opt_sau_03', name: 'Curry / Sauce', group_type: 'sauce', item_choice: 'Coconut Herb Stew', price_delta: 20.00, calorie_delta: 135, protein_delta: 2.5, carbs_delta: 8.0, fat_delta: 9.5, is_default: false, display_order: 3 }
+];
+
+const fallbackExtras = [
+  { id: 'opt_ext_01', name: 'Add-on Extra', group_type: 'extra', item_choice: 'Extra Phulka Roti (+1 Pc)', price_delta: 12.00, calorie_delta: 65, protein_delta: 2.0, carbs_delta: 12.0, fat_delta: 0.5, is_default: false, display_order: 1 },
+  { id: 'opt_ext_02', name: 'Add-on Extra', group_type: 'extra', item_choice: 'Fresh Thick Curd Bowl (100g)', price_delta: 25.00, calorie_delta: 70, protein_delta: 4.5, carbs_delta: 5.0, fat_delta: 3.0, is_default: false, display_order: 2 },
+  { id: 'opt_ext_03', name: 'Add-on Extra', group_type: 'extra', item_choice: 'Roasted Papad & Kachumber Salad', price_delta: 20.00, calorie_delta: 40, protein_delta: 1.5, carbs_delta: 6.0, fat_delta: 0.5, is_default: false, display_order: 3 }
+];
+
+const fallbackRemovals = [
+  { id: 'opt_rem_01', name: 'Ingredient Removal', group_type: 'removal', item_choice: 'No Onion', price_delta: 0.00, calorie_delta: -15, protein_delta: 0.0, carbs_delta: -3.0, fat_delta: 0.0, is_default: false, display_order: 1 },
+  { id: 'opt_rem_02', name: 'Ingredient Removal', group_type: 'removal', item_choice: 'No Garlic', price_delta: 0.00, calorie_delta: -5, protein_delta: 0.0, carbs_delta: -1.0, fat_delta: 0.0, is_default: false, display_order: 2 },
+  { id: 'opt_rem_03', name: 'Ingredient Removal', group_type: 'removal', item_choice: 'Less Cooking Oil', price_delta: 0.00, calorie_delta: -60, protein_delta: 0.0, carbs_delta: 0.0, fat_delta: -7.0, is_default: false, display_order: 3 }
+];
+
 export const FALLBACK_CUSTOMIZATION_OPTIONS = {
-  bases: [
-    { id: 'opt_base_01', name: 'Base Choice', group_type: 'base', item_choice: 'Steamed Basmati Rice', price_delta: 0.00, calorie_delta: 180, protein_delta: 3.5, carbs_delta: 38.0, fat_delta: 0.5, is_default: true, display_order: 1 },
-    { id: 'opt_base_02', name: 'Base Choice', group_type: 'base', item_choice: 'Brown Rice', price_delta: 20.00, calorie_delta: 165, protein_delta: 4.0, carbs_delta: 34.0, fat_delta: 1.2, is_default: false, display_order: 2 },
-    { id: 'opt_base_03', name: 'Base Choice', group_type: 'base', item_choice: 'Multigrain Phulka (3 Pcs)', price_delta: 15.00, calorie_delta: 195, protein_delta: 6.2, carbs_delta: 36.0, fat_delta: 1.5, is_default: false, display_order: 3 },
-    { id: 'opt_base_04', name: 'Base Choice', group_type: 'base', item_choice: 'Foxtail Millet Khichdi', price_delta: 25.00, calorie_delta: 150, protein_delta: 5.0, carbs_delta: 28.0, fat_delta: 1.0, is_default: false, display_order: 4 }
-  ],
-  proteins: [
-    { id: 'opt_prot_01', name: 'Protein Core', group_type: 'protein', item_choice: 'Fresh Malai Paneer Cubes (120g)', price_delta: 45.00, calorie_delta: 260, protein_delta: 18.5, carbs_delta: 4.0, fat_delta: 18.0, is_default: false, display_order: 1 },
-    { id: 'opt_prot_02', name: 'Protein Core', group_type: 'protein', item_choice: 'Organic Spiced Tofu (130g)', price_delta: 40.00, calorie_delta: 180, protein_delta: 16.0, carbs_delta: 3.0, fat_delta: 10.0, is_default: false, display_order: 2 },
-    { id: 'opt_prot_03', name: 'Protein Core', group_type: 'protein', item_choice: 'Two Farm Boiled Eggs', price_delta: 35.00, calorie_delta: 145, protein_delta: 13.0, carbs_delta: 1.0, fat_delta: 9.5, is_default: false, display_order: 3 },
-    { id: 'opt_prot_04', name: 'Protein Core', group_type: 'protein', item_choice: 'Grilled Herb Chicken Breast (140g)', price_delta: 65.00, calorie_delta: 210, protein_delta: 27.0, carbs_delta: 0.0, fat_delta: 4.5, is_default: false, display_order: 4 }
-  ],
-  sides: [
-    { id: 'opt_side_01', name: 'Side Vegetable', group_type: 'side', item_choice: 'Roasted Seasonal Vegetables', price_delta: 0.00, calorie_delta: 75, protein_delta: 2.5, carbs_delta: 11.0, fat_delta: 1.5, is_default: true, display_order: 1 },
-    { id: 'opt_side_02', name: 'Side Vegetable', group_type: 'side', item_choice: 'Homestyle Bhindi Masala', price_delta: 15.00, calorie_delta: 85, protein_delta: 2.0, carbs_delta: 10.0, fat_delta: 3.5, is_default: false, display_order: 2 },
-    { id: 'opt_side_03', name: 'Side Vegetable', group_type: 'side', item_choice: 'Steamed Broccoli & French Beans', price_delta: 25.00, calorie_delta: 55, protein_delta: 3.5, carbs_delta: 7.0, fat_delta: 0.5, is_default: false, display_order: 3 }
-  ],
-  spices: [
-    { id: 'opt_spc_01', name: 'Spice Level', group_type: 'spice', item_choice: 'Mild (Low Chili, Fragrant)', price_delta: 0.00, calorie_delta: 0, protein_delta: 0.0, carbs_delta: 0.0, fat_delta: 0.0, is_default: false, display_order: 1 },
-    { id: 'opt_spc_02', name: 'Spice Level', group_type: 'spice', item_choice: 'Medium (Balanced Indian Spicing)', price_delta: 0.00, calorie_delta: 0, protein_delta: 0.0, carbs_delta: 0.0, fat_delta: 0.0, is_default: true, display_order: 2 },
-    { id: 'opt_spc_03', name: 'Spice Level', group_type: 'spice', item_choice: 'Hot (Extra Green Chilies)', price_delta: 0.00, calorie_delta: 5, protein_delta: 0.0, carbs_delta: 1.0, fat_delta: 0.0, is_default: false, display_order: 3 }
-  ],
-  sauces: [
-    { id: 'opt_sau_01', name: 'Curry / Sauce', group_type: 'sauce', item_choice: 'Yellow Tadka Dal', price_delta: 0.00, calorie_delta: 110, protein_delta: 6.0, carbs_delta: 15.0, fat_delta: 2.5, is_default: true, display_order: 1 },
-    { id: 'opt_sau_02', name: 'Curry / Sauce', group_type: 'sauce', item_choice: 'Velvety Makhani Gravy', price_delta: 25.00, calorie_delta: 160, protein_delta: 3.5, carbs_delta: 10.0, fat_delta: 11.0, is_default: false, display_order: 2 },
-    { id: 'opt_sau_03', name: 'Curry / Sauce', group_type: 'sauce', item_choice: 'Coconut Herb Stew', price_delta: 20.00, calorie_delta: 135, protein_delta: 2.5, carbs_delta: 8.0, fat_delta: 9.5, is_default: false, display_order: 3 }
-  ],
-  extras: [
-    { id: 'opt_ext_01', name: 'Add-on Extra', group_type: 'extra', item_choice: 'Extra Phulka Roti (+1 Pc)', price_delta: 12.00, calorie_delta: 65, protein_delta: 2.0, carbs_delta: 12.0, fat_delta: 0.5, is_default: false, display_order: 1 },
-    { id: 'opt_ext_02', name: 'Add-on Extra', group_type: 'extra', item_choice: 'Fresh Thick Curd Bowl (100g)', price_delta: 25.00, calorie_delta: 70, protein_delta: 4.5, carbs_delta: 5.0, fat_delta: 3.0, is_default: false, display_order: 2 },
-    { id: 'opt_ext_03', name: 'Add-on Extra', group_type: 'extra', item_choice: 'Roasted Papad & Kachumber Salad', price_delta: 20.00, calorie_delta: 40, protein_delta: 1.5, carbs_delta: 6.0, fat_delta: 0.5, is_default: false, display_order: 3 }
-  ],
-  removals: [
-    { id: 'opt_rem_01', name: 'Ingredient Removal', group_type: 'removal', item_choice: 'No Onion', price_delta: 0.00, calorie_delta: -15, protein_delta: 0.0, carbs_delta: -3.0, fat_delta: 0.0, is_default: false, display_order: 1 },
-    { id: 'opt_rem_02', name: 'Ingredient Removal', group_type: 'removal', item_choice: 'No Garlic', price_delta: 0.00, calorie_delta: -5, protein_delta: 0.0, carbs_delta: -1.0, fat_delta: 0.0, is_default: false, display_order: 2 },
-    { id: 'opt_rem_03', name: 'Ingredient Removal', group_type: 'removal', item_choice: 'Less Cooking Oil', price_delta: 0.00, calorie_delta: -60, protein_delta: 0.0, carbs_delta: 0.0, fat_delta: -7.0, is_default: false, display_order: 3 }
-  ]
+  bases: fallbackBases,
+  base: fallbackBases,
+  proteins: fallbackProteins,
+  protein: fallbackProteins,
+  sides: fallbackSides,
+  side: fallbackSides,
+  spices: fallbackSpices,
+  spice: fallbackSpices,
+  sauces: fallbackSauces,
+  sauce: fallbackSauces,
+  extras: fallbackExtras,
+  extra: fallbackExtras,
+  removals: fallbackRemovals,
+  removal: fallbackRemovals
 };
 
 export const FALLBACK_SUBSCRIPTION_PLANS = [
@@ -852,6 +873,472 @@ export const FALLBACK_ADMIN_DASHBOARD = {
   ]
 };
 
+
+export const FALLBACK_7_DAY_MEAL_PLAN = {
+  planTitle: 'Personalized 7-Day Precision Nutrition Plan',
+  summary: 'Engineered daily calorie & macronutrient allocations using balanced homestyle rotis, lentils, lean proteins and clean complex grains.',
+  targetGoal: 'BALANCED',
+  targetProfile: {
+    targetCalories: 2050,
+    targetProteinGrams: 85,
+    targetCarbsGrams: 230,
+    targetFatGrams: 52,
+    bmr: 1650,
+    tdee: 2150,
+    goalDescription: 'Sustained daily vitality & balanced metabolic conditioning'
+  },
+  schedule: [
+    {
+      dayNumber: 1,
+      dayName: 'Monday',
+      totalCalories: 2020,
+      totalProtein: 86,
+      totalCarbs: 226,
+      totalFat: 50,
+      estimatedCost: 480,
+      meals: {
+        breakfast: {
+          id: 'meal_04',
+          name: 'Fluffy Steamed Idli & Medu Vada Combo',
+          calories: 420,
+          protein_g: 14,
+          carbs_g: 65,
+          fat_g: 10,
+          base_price: 110,
+          kitchen_name: 'Dakshin Flavors Mess',
+          image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600',
+          description: 'Fluffy steamed rice idlis with crispy medu vada, fresh coconut chutney & piping hot sambar.',
+          rationale: 'Slow-fermented rice & lentil cakes providing sustained morning glucose and healthy gut flora.',
+          swap_options: [{ id: 'meal_05', name: 'Nagpur Tarri Poha with Sprouts', calories: 380, protein_g: 12, carbs_g: 58, fat_g: 8, base_price: 90, kitchen_name: 'Swad Sugandh Kitchen', image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600' }]
+        },
+        lunch: {
+          id: 'meal_01',
+          name: 'Deluxe Homestyle North Indian Thali',
+          calories: 680,
+          protein_g: 28,
+          carbs_g: 78,
+          fat_g: 18,
+          base_price: 180,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600',
+          description: '4 hot whole-wheat phulkas, slow-simmered dal tadka, seasonal subzi, paneer bhurji, basmati rice & salad.',
+          rationale: 'Balanced distribution of whole wheat complex carbs and dairy casein protein for afternoon stamina.',
+          swap_options: [{ id: 'meal_02', name: 'Dal Makhani & Jeera Rice Bowl', calories: 610, protein_g: 20, carbs_g: 72, fat_g: 16, base_price: 160, kitchen_name: 'Pind Da Dhaba', image_url: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600' }]
+        },
+        dinner: {
+          id: 'meal_06',
+          name: 'High-Protein Paneer Bhurji & Multigrain Phulkas',
+          calories: 590,
+          protein_g: 34,
+          carbs_g: 48,
+          fat_g: 15,
+          base_price: 210,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600',
+          description: 'Fresh cottage cheese scramble with bell peppers, 3 multigrain phulkas & sprout salad.',
+          rationale: 'Nighttime slow-digesting protein aiding overnight tissue regeneration and muscle synthesis.',
+          swap_options: [{ id: 'meal_03', name: 'Pithla Bhakri with Thecha', calories: 540, protein_g: 16, carbs_g: 65, fat_g: 14, base_price: 150, kitchen_name: 'Swad Sugandh Kitchen', image_url: 'https://images.unsplash.com/photo-1606471191009-63994c53433b?w=600' }]
+        },
+        snack: {
+          id: 'meal_17',
+          name: 'Roasted Spiced Makhana & Sprout Bowl',
+          calories: 190,
+          protein_g: 10,
+          carbs_g: 26,
+          fat_g: 4,
+          base_price: 70,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+          description: 'Crunchy slow-roasted fox nuts tossed in Himalayan pink salt and roasted cumin.',
+          rationale: 'Low-calorie crunchy snack to curb afternoon cravings.'
+        }
+      }
+    },
+    {
+      dayNumber: 2,
+      dayName: 'Tuesday',
+      totalCalories: 2060,
+      totalProtein: 88,
+      totalCarbs: 230,
+      totalFat: 51,
+      estimatedCost: 490,
+      meals: {
+        breakfast: {
+          id: 'meal_05',
+          name: 'Nagpur Tarri Poha with Sprouts',
+          calories: 410,
+          protein_g: 14,
+          carbs_g: 64,
+          fat_g: 9,
+          base_price: 90,
+          kitchen_name: 'Swad Sugandh Kitchen',
+          image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600',
+          description: 'Flattened rice tossed with roasted peanuts, mustard seeds, curry leaves, topped with crunchy moong sprouts.',
+          rationale: 'Iron-rich breakfast with healthy plant fats from roasted peanuts.'
+        },
+        lunch: {
+          id: 'meal_07',
+          name: 'Quinoa & Grilled Paneer Power Bowl',
+          calories: 640,
+          protein_g: 32,
+          carbs_g: 70,
+          fat_g: 16,
+          base_price: 240,
+          kitchen_name: 'GreenLeaf Vegan Co.',
+          image_url: 'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=600',
+          description: 'Tri-color organic quinoa, spiced paneer cubes, roasted zucchini, cherry tomatoes & mint tahini.',
+          rationale: 'Complete amino-acid profile from ancient grain quinoa and low-fat paneer.'
+        },
+        dinner: {
+          id: 'meal_02',
+          name: 'Dal Makhani & Jeera Rice Executive Meal',
+          calories: 670,
+          protein_g: 26,
+          carbs_g: 78,
+          fat_g: 18,
+          base_price: 170,
+          kitchen_name: 'Pind Da Dhaba',
+          image_url: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600',
+          description: 'Slow-cooked black lentils overnight with aromatic cumin basmati, 2 whole wheat rotis and pickled onion.',
+          rationale: 'Comforting soluble fiber and iron from whole black urad lentils.'
+        },
+        snack: {
+          id: 'meal_19',
+          name: 'Chilled Spiced Masala Buttermilk (Chaas)',
+          calories: 90,
+          protein_g: 6,
+          carbs_g: 8,
+          fat_g: 2,
+          base_price: 40,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=600',
+          description: 'Cultured churning buttermilk with toasted cumin, ginger, mint, and rock salt.',
+          rationale: 'Hydrating natural probiotic drink supporting digestive enzymes.'
+        }
+      }
+    },
+    {
+      dayNumber: 3,
+      dayName: 'Wednesday',
+      totalCalories: 2010,
+      totalProtein: 84,
+      totalCarbs: 228,
+      totalFat: 48,
+      estimatedCost: 470,
+      meals: {
+        breakfast: {
+          id: 'meal_04',
+          name: 'Fluffy Steamed Idli & Sambar Bowl',
+          calories: 390,
+          protein_g: 13,
+          carbs_g: 62,
+          fat_g: 8,
+          base_price: 95,
+          kitchen_name: 'Dakshin Flavors Mess',
+          image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600',
+          description: 'Three steamed idlis soaked in drumstick lentil sambar with coconut chutney.',
+          rationale: 'Zero oil steam-cooked breakfast that provides rapid digestion and glycogen replenishment.'
+        },
+        lunch: {
+          id: 'meal_01',
+          name: 'Homestyle Rajma Chawal & Phulka Meal',
+          calories: 680,
+          protein_g: 27,
+          carbs_g: 82,
+          fat_g: 14,
+          base_price: 175,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600',
+          description: 'Kashmiri red kidney beans slow-simmered in ginger-tomato gravy, steamed rice, 2 rotis and kachumber.',
+          rationale: 'High dietary fiber and potassium reducing mid-week fatigue.'
+        },
+        dinner: {
+          id: 'meal_08',
+          name: 'Tofu Bhurji & Methi Thepla Tiffin',
+          calories: 580,
+          protein_g: 31,
+          carbs_g: 48,
+          fat_g: 16,
+          base_price: 195,
+          kitchen_name: 'GreenLeaf Vegan Co.',
+          image_url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600',
+          description: 'Soya bean paneer scramble with freshly plucked fenugreek leaves, 3 theplas & garlic chutney.',
+          rationale: 'Clean vegan protein packed with micronutrients and iron from fresh fenugreek.'
+        },
+        snack: {
+          id: 'meal_17',
+          name: 'Roasted Spiced Makhana Bowl',
+          calories: 180,
+          protein_g: 8,
+          carbs_g: 25,
+          fat_g: 3,
+          base_price: 65,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+          description: 'Crispy lotus seeds seasoned with Himalayan pink salt.',
+          rationale: 'Satisfies evening crunch without unneeded saturated fats.'
+        }
+      }
+    },
+    {
+      dayNumber: 4,
+      dayName: 'Thursday',
+      totalCalories: 2040,
+      totalProtein: 89,
+      totalCarbs: 224,
+      totalFat: 50,
+      estimatedCost: 485,
+      meals: {
+        breakfast: {
+          id: 'meal_10',
+          name: 'Sprouted Moong & Egg White Scramble Box',
+          calories: 430,
+          protein_g: 26,
+          carbs_g: 38,
+          fat_g: 10,
+          base_price: 130,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=600',
+          description: 'Sprouted green gram steamed with coriander, lemon and scrambled farm eggs, served with toasted sourdough.',
+          rationale: 'B-complex rich breakfast kicking off high metabolic turnover.'
+        },
+        lunch: {
+          id: 'meal_03',
+          name: 'Authentic Maharashtrian Pithla Bhakri Thali',
+          calories: 660,
+          protein_g: 22,
+          carbs_g: 74,
+          fat_g: 16,
+          base_price: 165,
+          kitchen_name: 'Swad Sugandh Kitchen',
+          image_url: 'https://images.unsplash.com/photo-1606471191009-63994c53433b?w=600',
+          description: 'Traditional gram-flour curry with 2 hot Jowar (sorghum) bhakris, fiery green chilli thecha & raw onion.',
+          rationale: 'Gluten-free sorghum millet providing slow-burning energy.'
+        },
+        dinner: {
+          id: 'meal_06',
+          name: 'Paneer Tikka & Multigrain Phulka Tiffin',
+          calories: 610,
+          protein_g: 32,
+          carbs_g: 52,
+          fat_g: 17,
+          base_price: 210,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600',
+          description: 'Clay-oven smoked paneer cubes, tossed capsicum, mint yogurt dip and 3 multigrain phulkas.',
+          rationale: 'High calcium and anti-inflammatory curcumin from tandoori marinade.'
+        },
+        snack: {
+          id: 'meal_19',
+          name: 'Probiotic Mint Chaas & Roasted Flaxseeds',
+          calories: 110,
+          protein_g: 6,
+          carbs_g: 8,
+          fat_g: 3,
+          base_price: 45,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=600',
+          description: 'Freshly churned yoghurt chaas with roasted omega-3 flax seeds.',
+          rationale: 'Gut-nourishing probiotics paired with essential alpha-linolenic fatty acids.'
+        }
+      }
+    },
+    {
+      dayNumber: 5,
+      dayName: 'Friday',
+      totalCalories: 2090,
+      totalProtein: 91,
+      totalCarbs: 232,
+      totalFat: 52,
+      estimatedCost: 510,
+      meals: {
+        breakfast: {
+          id: 'meal_05',
+          name: 'Indori Poha with Sev & Sprouts',
+          calories: 420,
+          protein_g: 13,
+          carbs_g: 66,
+          fat_g: 11,
+          base_price: 95,
+          kitchen_name: 'Swad Sugandh Kitchen',
+          image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600',
+          description: 'Steamed flattened rice tossed with jeeravan spices, pomegranate pearls, topped with roasted sprouts.',
+          rationale: 'Easy-to-digest carbohydrates to fuel the end of the workweek.'
+        },
+        lunch: {
+          id: 'meal_13',
+          name: 'Hyderabadi Soya & Paneer Dum Biryani',
+          calories: 690,
+          protein_g: 30,
+          carbs_g: 78,
+          fat_g: 18,
+          base_price: 210,
+          kitchen_name: 'Pind Da Dhaba',
+          image_url: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600',
+          description: 'Long grain aged basmati layered with marinated soya chaap, mint, saffron, accompanied with cucumber raita.',
+          rationale: 'Celebratory end-of-week homestyle biryani with 30g+ plant protein.'
+        },
+        dinner: {
+          id: 'meal_01',
+          name: 'Light Yellow Dal Tadka & Jeera Phulkas',
+          calories: 560,
+          protein_g: 24,
+          carbs_g: 58,
+          fat_g: 13,
+          base_price: 160,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600',
+          description: 'Comforting split yellow moong dal with cumin-garlic tadka, 3 phulkas, bottle gourd subzi and salad.',
+          rationale: 'Light evening meal promoting peaceful sleep without digestive discomfort.'
+        },
+        snack: {
+          id: 'meal_17',
+          name: 'Crunchy Roasted Chana & Peanut Mix',
+          calories: 190,
+          protein_g: 11,
+          carbs_g: 20,
+          fat_g: 5,
+          base_price: 65,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+          description: 'Dry roasted Bengal gram tossed with rock salt and lemon juice.',
+          rationale: 'High dietary fiber and copper for cellular health.'
+        }
+      }
+    },
+    {
+      dayNumber: 6,
+      dayName: 'Saturday',
+      totalCalories: 2110,
+      totalProtein: 93,
+      totalCarbs: 235,
+      totalFat: 53,
+      estimatedCost: 520,
+      meals: {
+        breakfast: {
+          id: 'meal_04',
+          name: 'Onion Uttapam with Mixed Vegetable Sambar',
+          calories: 440,
+          protein_g: 15,
+          carbs_g: 68,
+          fat_g: 11,
+          base_price: 115,
+          kitchen_name: 'Dakshin Flavors Mess',
+          image_url: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600',
+          description: 'Thick fermented rice & lentil pancake topped with diced onions, tomatoes and curry leaves.',
+          rationale: 'Wholesome weekend breakfast rich in vegetable fiber and natural vitamins.'
+        },
+        lunch: {
+          id: 'meal_07',
+          name: 'Nutri-Max Paneer Tikka Rice Bowl',
+          calories: 670,
+          protein_g: 33,
+          carbs_g: 72,
+          fat_g: 17,
+          base_price: 230,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?w=600',
+          description: 'Charred paneer cubes on a bed of turmeric brown rice, sautéed greens and light yoghurt gravy.',
+          rationale: 'Weekend refuel bowl for active sports, fitness, or weekend recovery.'
+        },
+        dinner: {
+          id: 'meal_02',
+          name: 'Chole Masala & Whole Wheat Bhature Swap',
+          calories: 680,
+          protein_g: 27,
+          carbs_g: 82,
+          fat_g: 17,
+          base_price: 185,
+          kitchen_name: 'Pind Da Dhaba',
+          image_url: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600',
+          description: 'Spiced Amritsari chickpeas, 3 whole-wheat baked phulkas, carrot pickle and sliced red onion.',
+          rationale: 'Clean chickpea dietary fiber for cholesterol control.'
+        },
+        snack: {
+          id: 'meal_19',
+          name: 'Cold Pressed Sweet Lime & Mint Refresher',
+          calories: 120,
+          protein_g: 3,
+          carbs_g: 26,
+          fat_g: 1,
+          base_price: 60,
+          kitchen_name: 'GreenLeaf Vegan Co.',
+          image_url: 'https://images.unsplash.com/photo-1556881286-fc6915169721?w=600',
+          description: 'Fresh mosambi juice extracted without added sugar or ice.',
+          rationale: 'Vitamin C antioxidant boost to combat metabolic stress.'
+        }
+      }
+    },
+    {
+      dayNumber: 7,
+      dayName: 'Sunday',
+      totalCalories: 2040,
+      totalProtein: 87,
+      totalCarbs: 226,
+      totalFat: 50,
+      estimatedCost: 495,
+      meals: {
+        breakfast: {
+          id: 'meal_05',
+          name: 'Homestyle Methi Thepla & Fresh Curd',
+          calories: 410,
+          protein_g: 14,
+          carbs_g: 60,
+          fat_g: 10,
+          base_price: 100,
+          kitchen_name: 'Swad Sugandh Kitchen',
+          image_url: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=600',
+          description: 'Three thin whole wheat theplas infused with fenugreek greens and spices, served with fresh unflavored curd.',
+          rationale: 'Soothing Sunday morning meal that primes the digestive tract.'
+        },
+        lunch: {
+          id: 'meal_01',
+          name: 'Sunday Special Homestyle Grand Thali',
+          calories: 690,
+          protein_g: 29,
+          carbs_g: 79,
+          fat_g: 18,
+          base_price: 195,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600',
+          description: 'Paneer makhani, dal tadka, aloo gobi, 4 soft phulkas, jeera rice, papad, and a warm jaggery gulab jamun.',
+          rationale: 'Satisfying Sunday feast with mindful macronutrient ratios.'
+        },
+        dinner: {
+          id: 'meal_06',
+          name: 'Light Moong Dal Khichdi & Desi Ghee Drizzle',
+          calories: 550,
+          protein_g: 22,
+          carbs_g: 65,
+          fat_g: 12,
+          base_price: 140,
+          kitchen_name: 'Annapurna Homestyle Tiffin Ghar',
+          image_url: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600',
+          description: 'A comforting blend of aged rice and split yellow moong, tempered with cumin and a spoonful of A2 cow ghee.',
+          rationale: 'Ayurvedic gut-reset dinner preparing the body for the upcoming work week.'
+        },
+        snack: {
+          id: 'meal_17',
+          name: 'Roasted Spiced Makhana Bowl',
+          calories: 180,
+          protein_g: 8,
+          carbs_g: 24,
+          fat_g: 3,
+          base_price: 65,
+          kitchen_name: 'FitProtein Kitchens',
+          image_url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+          description: 'Crispy lotus seeds with pink salt.',
+          rationale: 'Light and mineral-rich evening treat.'
+        }
+      }
+    }
+  ]
+};
+
+// Fallback cart state holder for offline sessions
+let localMemoryCartItems = [];
+
+
 /**
  * Resolves a mock fallback response for any route when remote backend is offline
  */
@@ -942,22 +1429,210 @@ export function getFallbackApiResponse(path, options = {}) {
   if (url.includes('/api/catalog/meals')) {
     return FALLBACK_MEALS;
   }
-  if (url.includes('/api/catalog/customization-options/calculate')) {
+  // 1. Cart endpoints
+  if (url.includes('/api/cart/add')) {
+    let body = {};
+    try {
+      if (options && options.body) body = JSON.parse(options.body);
+    } catch {}
+    const mealId = body.meal_id || body.id || 'meal_01';
+    const foundMeal = FALLBACK_MEALS.find(m => m.id === mealId) || FALLBACK_MEALS[0];
+    const qty = parseInt(body.quantity, 10) || 1;
+    const existingIndex = localMemoryCartItems.findIndex(i => i.meal_id === foundMeal.id);
+    if (existingIndex >= 0) {
+      localMemoryCartItems[existingIndex].quantity += qty;
+      localMemoryCartItems[existingIndex].total_price = localMemoryCartItems[existingIndex].quantity * foundMeal.base_price;
+    } else {
+      localMemoryCartItems.push({
+        id: 'cart_item_' + Date.now(),
+        meal_id: foundMeal.id,
+        meal_name_snapshot: foundMeal.name,
+        meal_image_snapshot: foundMeal.image_url,
+        unit_base_price: foundMeal.base_price,
+        quantity: qty,
+        portion_snapshot: body.portion || 'standard',
+        customizations_snapshot: body.customizations || {},
+        total_price: foundMeal.base_price * qty
+      });
+    }
+    const subtotal = localMemoryCartItems.reduce((acc, i) => acc + (i.total_price || 0), 0);
+    const count = localMemoryCartItems.reduce((acc, i) => acc + (i.quantity || 0), 0);
     return {
-      price: 185,
-      calories: 540,
-      protein: 24,
-      carbs: 65,
-      fat: 14,
-      breakdown: { base_price: 120, delta_price: 65 }
+      success: true,
+      message: 'Meal added to cart successfully',
+      cart: {
+        id: 'cart_demo',
+        seller: FALLBACK_SELLERS[0],
+        items: [...localMemoryCartItems],
+        subtotal,
+        item_count: count
+      }
     };
   }
-  if (url.includes('/api/catalog/customization-options')) {
-    return { grouped: FALLBACK_CUSTOMIZATION_OPTIONS };
+
+  if (url.includes('/api/cart/items/')) {
+    const parts = url.split('/');
+    const itemId = parts[parts.length - 1].split('?')[0];
+    if (options.method === 'DELETE') {
+      localMemoryCartItems = localMemoryCartItems.filter(i => i.id !== itemId && i.meal_id !== itemId);
+    } else if (options.method === 'PUT') {
+      let body = {};
+      try { if (options.body) body = JSON.parse(options.body); } catch {}
+      const target = localMemoryCartItems.find(i => i.id === itemId || i.meal_id === itemId);
+      if (target) {
+        target.quantity = body.quantity;
+        target.total_price = target.unit_base_price * body.quantity;
+      }
+    }
+    const subtotal = localMemoryCartItems.reduce((acc, i) => acc + (i.total_price || 0), 0);
+    const count = localMemoryCartItems.reduce((acc, i) => acc + (i.quantity || 0), 0);
+    return { success: true, items: [...localMemoryCartItems], subtotal, item_count: count };
   }
+
+  if (url.includes('/api/cart/clear')) {
+    localMemoryCartItems = [];
+    return { success: true, message: 'Cart cleared' };
+  }
+
+  if (url.includes('/api/cart')) {
+    if (localMemoryCartItems.length === 0) {
+      localMemoryCartItems = [
+        {
+          id: 'cart_item_init_01',
+          meal_id: FALLBACK_MEALS[0].id,
+          meal_name_snapshot: FALLBACK_MEALS[0].name,
+          meal_image_snapshot: FALLBACK_MEALS[0].image_url,
+          unit_base_price: FALLBACK_MEALS[0].base_price,
+          quantity: 1,
+          portion_snapshot: 'standard',
+          customizations_snapshot: {},
+          total_price: FALLBACK_MEALS[0].base_price
+        }
+      ];
+    }
+    const subtotal = localMemoryCartItems.reduce((acc, i) => acc + (i.total_price || 0), 0);
+    const count = localMemoryCartItems.reduce((acc, i) => acc + (i.quantity || 0), 0);
+    return {
+      id: 'cart_demo',
+      seller: FALLBACK_SELLERS[0],
+      items: [...localMemoryCartItems],
+      subtotal,
+      item_count: count
+    };
+  }
+
+  // 2. Custom Meal Builder endpoints
+  if (url.includes('/api/custom-meals/calculate') || url.includes('/api/custom-meals/recalculate') || url.includes('/api/catalog/customization-options/calculate')) {
+    let body = {};
+    try {
+      if (options && options.body) body = JSON.parse(options.body);
+    } catch {}
+    const mealId = body.meal_id || body.base_meal_id || body.mealId || 'meal_01';
+    const foundMeal = FALLBACK_MEALS.find(m => m.id === mealId) || FALLBACK_MEALS[0];
+    const selections = body.selections || body || {};
+    const portion = selections.portion || 'standard';
+    let basePrice = parseFloat(foundMeal.base_price || 180);
+    let delta = 0;
+    if (portion === 'large') delta += 40;
+    if (portion === 'fitness_mega') delta += 75;
+    if (selections.extra_ids && Array.isArray(selections.extra_ids)) {
+      delta += selections.extra_ids.length * 35;
+    }
+    const finalPrice = basePrice + delta;
+
+    return {
+      base_meal: {
+        id: foundMeal.id,
+        name: foundMeal.name,
+        base_price: foundMeal.base_price,
+        seller_id: foundMeal.seller_id
+      },
+      portion,
+      calculated_price: finalPrice,
+      price: finalPrice,
+      estimated_calories: (foundMeal.calories || 520) + (portion === 'large' ? 120 : portion === 'fitness_mega' ? 240 : 40),
+      estimated_protein: (foundMeal.protein_grams || 24) + (portion === 'fitness_mega' ? 15 : 6),
+      estimated_carbs: (foundMeal.carbs_grams || 65) + 10,
+      estimated_fat: (foundMeal.fat_grams || 14) + 4,
+      applied_options: [
+        { group: 'base', item: 'Organic Brown Rice Swap', price_delta: 20 },
+        { group: 'protein', item: 'Fresh Malai Paneer', price_delta: 20 }
+      ],
+      selected_option_ids: ['opt_base_02', 'opt_prot_02'],
+      removals: [],
+      allergen_warnings: [],
+      special_notes: selections.special_notes || null,
+      breakdown: { base_price: basePrice, delta_price: delta }
+    };
+  }
+
+  if (url.includes('/api/custom-meals/save')) {
+    return {
+      success: true,
+      id: 'saved_custom_' + Date.now(),
+      message: 'Custom meal saved to favorites!'
+    };
+  }
+
+  // 3. Subscription & Tiffin Plans endpoints
+  if (url.includes('/api/subscriptions/calculate')) {
+    let body = {};
+    try {
+      if (options && options.body) body = JSON.parse(options.body);
+    } catch {}
+    const planId = body.plan_id || 'sub_plan_01';
+    const slot = body.slot || 'both';
+    const startDate = body.start_date || new Date().toISOString().split('T')[0];
+    const plan = FALLBACK_SUBSCRIPTION_PLANS.find(p => p.id === planId) || FALLBACK_SUBSCRIPTION_PLANS[0];
+    const seller = FALLBACK_SELLERS[0];
+    const mealsPerDay = slot === 'both' ? 2 : 1;
+    const deliveryDays = plan.cycle_days || 28;
+    const totalMeals = deliveryDays * mealsPerDay;
+    const basePrice = parseFloat(plan.base_price_per_meal || 160);
+    const discountPercent = parseFloat(plan.plan_discount_percent || 15);
+    const effectivePrice = Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100;
+    const subtotal = Math.round(basePrice * totalMeals);
+    const discountAmount = Math.round((subtotal - (effectivePrice * totalMeals)) * 100) / 100;
+    const taxAmount = Math.round((effectivePrice * totalMeals) * 0.05 * 100) / 100;
+    const grandTotal = Math.round(((effectivePrice * totalMeals) + taxAmount) * 100) / 100;
+    const end = new Date(new Date(startDate).getTime() + (deliveryDays * 86400000)).toISOString().split('T')[0];
+
+    return {
+      plan,
+      seller: { business_name: seller.business_name, area: seller.area },
+      slot,
+      start_date: startDate,
+      end_date: end,
+      delivery_days_count: deliveryDays,
+      meals_per_day: mealsPerDay,
+      total_meals_purchased: totalMeals,
+      base_price_per_meal: basePrice,
+      discount_percent: discountPercent,
+      effective_price_per_meal: effectivePrice,
+      subtotal,
+      discount_amount: discountAmount,
+      delivery_fee: 0,
+      tax_amount: taxAmount,
+      grand_total: grandTotal,
+      max_skips_allowed: plan.max_skips_allowed || 2,
+      skip_policy: 'Up to 2 skip-days permitted per cycle. Each skip extends your end date by 1 day so no purchased meal is lost.',
+      delivery_dates_preview: []
+    };
+  }
+
+  if (url.includes('/api/subscriptions/create')) {
+    return {
+      success: true,
+      subscription_id: 'sub_active_' + Date.now(),
+      status: 'active',
+      message: 'Tiffin subscription activated successfully! Your daily schedule is ready.'
+    };
+  }
+
   if (url.includes('/api/subscriptions/plans')) {
     return FALLBACK_SUBSCRIPTION_PLANS;
   }
+
   if (url.includes('/api/subscriptions/my')) {
     return [
       {
@@ -967,15 +1642,67 @@ export function getFallbackApiResponse(path, options = {}) {
         seller: FALLBACK_SELLERS[0],
         status: 'active',
         start_date: new Date().toISOString().split('T')[0],
-        slot: 'lunch',
-        meals_remaining: 24,
+        slot: 'both',
+        meals_remaining: 52,
         total_cycle_days: 28
       }
     ];
   }
+
+  // 4. Meal Planner Service endpoints
+  if (url.includes('/api/meal-plans/generate')) {
+    return FALLBACK_7_DAY_MEAL_PLAN;
+  }
+
+  if (url.includes('/api/meal-plans/recommendations')) {
+    return FALLBACK_MEALS.slice(0, 6);
+  }
+
+  // 5. Checkout & Orders endpoints
+  if (url.includes('/api/orders/calculate')) {
+    let body = {};
+    try {
+      if (options && options.body) body = JSON.parse(options.body);
+    } catch {}
+    const subtotal = parseFloat(body.subtotal || 250);
+    const coupon = (body.coupon_code || '').toUpperCase();
+    let discount = 0;
+    let couponInfo = null;
+    if (coupon === 'WELCOME50' || coupon === 'FITBITE50') {
+      discount = Math.min(50, Math.round(subtotal * 0.2));
+      couponInfo = { code: coupon, discount_amount: discount };
+    }
+    const taxes = Math.round(subtotal * 0.05 * 100) / 100;
+    const delivery = 0; // free delivery
+    return {
+      subtotal,
+      discount_amount: discount,
+      tax_amount: taxes,
+      delivery_fee: delivery,
+      grand_total: Math.round((subtotal - discount + taxes + delivery) * 100) / 100,
+      coupon: couponInfo
+    };
+  }
+
+  if (url.includes('/api/orders/checkout')) {
+    localMemoryCartItems = [];
+    return {
+      success: true,
+      order_id: 'ord_demo_' + Date.now(),
+      status: 'confirmed',
+      message: 'Order placed successfully! Kitchen has received your ticket.'
+    };
+  }
+
   if (url.includes('/api/orders/my')) {
     return FALLBACK_ORDERS;
   }
+
+  if (url.includes('/api/catalog/customization-options')) {
+    return { grouped: FALLBACK_CUSTOMIZATION_OPTIONS };
+  }
+
+  // 6. Kitchen Portal (/seller) endpoints
   if (url.includes('/api/seller/overview')) {
     return FALLBACK_SELLER_DASHBOARD.overview;
   }
@@ -997,6 +1724,8 @@ export function getFallbackApiResponse(path, options = {}) {
   if (url.includes('/api/seller/settings')) {
     return FALLBACK_SELLER_DASHBOARD.settings;
   }
+
+  // 7. Admin Portal (/admin) endpoints
   if (url.includes('/api/admin/metrics')) {
     return FALLBACK_ADMIN_DASHBOARD.metrics;
   }
@@ -1012,6 +1741,8 @@ export function getFallbackApiResponse(path, options = {}) {
   if (url.includes('/api/admin/audit-logs')) {
     return FALLBACK_ADMIN_DASHBOARD.auditLogs;
   }
+
+  // 8. User Addresses
   if (url.includes('/api/users/addresses')) {
     return [
       {
@@ -1020,6 +1751,7 @@ export function getFallbackApiResponse(path, options = {}) {
         recipient_name: 'Rahul Sharma',
         phone: '+91 98765 43210',
         street_address: 'Flat 402, Green Glen Layout, 5th Cross',
+        address_line1: 'Flat 402, Green Glen Layout, 5th Cross',
         area: 'Indiranagar',
         city: 'Bengaluru',
         pincode: '560038',
