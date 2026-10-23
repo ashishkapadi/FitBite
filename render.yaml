@@ -30,7 +30,7 @@ services:
       - key: DB_SSL
         value: "true"
       - key: ENABLE_LOCAL_JSON_FALLBACK
-        value: "false"
+        value: "true"
       # Note: Render Free tier does not support private internal networking.
       # Set this to the public HTTPS URL assigned to fitbite-meal-planner (e.g. https://fitbite-meal-planner.onrender.com)
       - key: JAVA_MEAL_PLANNER_URL

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "FitBite - Your meals, your way. End-to-end food delivery, tiffin subscriptions & personalized nutrition platform.",
   "scripts": {
+    "build": "npm --prefix frontend run build",
+    "start": "node backend/src/server.js",
     "start:backend": "node backend/src/server.js",
     "start:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
