@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
-  const { user, token, openAuthModal, login, switchPersona } = useAuth();
+  const { user, token, openAuthModal, login, logout } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('sellers'); // 'sellers' | 'users' | 'orders' | 'logs'
@@ -29,6 +29,12 @@ export default function AdminDashboardPage() {
   const [ordersList, setOrdersList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Admin authentication form state
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminAuthLoading, setAdminAuthLoading] = useState(false);
+  const [adminAuthError, setAdminAuthError] = useState('');
 
   // Seller filter
   const [sellerFilter, setSellerFilter] = useState('all');
@@ -172,30 +178,190 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleQuickAdminLogin = async () => {
-    await switchPersona('admin');
+  const handleAdminSignIn = async (e) => {
+    e.preventDefault();
+    setAdminAuthError('');
+    setAdminAuthLoading(true);
+    try {
+      await login(adminEmail, adminPassword, 'admin');
+    } catch (err) {
+      setAdminAuthError(err.message || 'Invalid administrator credentials.');
+    } finally {
+      setAdminAuthLoading(false);
+    }
   };
 
-
-  if (!user || user.role !== 'admin') {
+  if (!user) {
     return (
-      <div style={{ maxWidth: '600px', margin: '5rem auto', textAlign: 'center', padding: '2rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-        <Lock size={48} color="#D97706" style={{ margin: '0 auto 1rem' }} />
-        <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#111827', margin: '0 0 0.5rem' }}>
-          Administrator Authentication Required
-        </h2>
-        <p style={{ color: '#4B5563', margin: '0 0 1.5rem', lineHeight: '1.5' }}>
-          This screen manages platform-wide seller compliance, FSSAI reviews, and financial oversight. Please sign in with administrator credentials.
-        </p>
-
-        <div style={{ background: '#F8FAFC', padding: '1rem', borderRadius: '0.75rem', marginBottom: '1.5rem', fontSize: '0.85rem', color: '#334155', textAlign: 'left' }}>
-          <div><b>Demo Admin Account:</b> admin@fitbite.demo</div>
-          <div><b>Password:</b> FitBite@Admin2026</div>
+      <div style={{ maxWidth: '480px', margin: '4rem auto', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 10px 25px rgba(0,0,0,0.06)' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '16px',
+            background: 'linear-gradient(135deg, #7C3AED 0%, #4C1D95 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem',
+            color: '#FFFFFF'
+          }}>
+            <Lock size={28} />
+          </div>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
+            Administrator Console
+          </h2>
+          <p style={{ color: '#64748B', fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>
+            Sign in with verified administrator credentials to access platform governance and compliance controls.
+          </p>
         </div>
 
-        <button className="btn btn-primary" onClick={handleQuickAdminLogin} style={{ padding: '0.75rem 1.5rem', fontSize: '1rem' }}>
-          1-Click Admin Sign In
-        </button>
+        {adminAuthError && (
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: '8px',
+            color: '#DC2626',
+            fontSize: '0.85rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <AlertTriangle size={16} />
+            <span>{adminAuthError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleAdminSignIn}>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+              Admin Email Address
+            </label>
+            <input
+              type="email"
+              required
+              className="form-input"
+              value={adminEmail}
+              onChange={(e) => setAdminEmail(e.target.value)}
+              placeholder="admin@fitbite.demo"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+              Password
+            </label>
+            <input
+              type="password"
+              required
+              className="form-input"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              placeholder="••••••••••••"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1' }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={adminAuthLoading}
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              padding: '12px',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              backgroundColor: '#7C3AED',
+              borderColor: '#7C3AED',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            {adminAuthLoading ? (
+              <>
+                <RefreshCw className="spin" size={18} />
+                <span>Verifying Credentials...</span>
+              </>
+            ) : (
+              <>
+                <ShieldCheck size={18} />
+                <span>Sign In to Admin Console</span>
+              </>
+            )}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#64748B',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            ← Return to Customer Storefront
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (user.role !== 'admin') {
+    return (
+      <div style={{ maxWidth: '520px', margin: '4rem auto', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+        <div style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '16px',
+          backgroundColor: '#FEE2E2',
+          color: '#DC2626',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 1.25rem'
+        }}>
+          <AlertTriangle size={32} />
+        </div>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
+          Access Denied (403)
+        </h2>
+        <p style={{ color: '#64748B', fontSize: '0.92rem', margin: '0 0 1.5rem', lineHeight: 1.5 }}>
+          You are currently signed in as <b>{user.email}</b> (Role: <b>{user.role}</b>). Administrative privileges are required to access this console.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={async () => {
+              await logout();
+              setAdminEmail('');
+              setAdminPassword('');
+              setAdminAuthError('');
+            }}
+            style={{ padding: '10px', fontWeight: 600 }}
+          >
+            Sign Out and Switch Account
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate('/')}
+            style={{ padding: '10px', fontWeight: 600 }}
+          >
+            Return to Customer Storefront
+          </button>
+        </div>
       </div>
     );
   }

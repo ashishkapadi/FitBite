@@ -6,6 +6,10 @@
  */
 
 const getApiBase = () => {
+  // If running in a browser on localhost / 127.0.0.1, always use relative '/api' proxy
+  if (typeof window !== 'undefined' && window.location.hostname && (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1'))) {
+    return '/api';
+  }
   if (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim()) {
     return import.meta.env.VITE_API_BASE_URL.trim();
   }

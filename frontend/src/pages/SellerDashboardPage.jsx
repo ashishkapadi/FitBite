@@ -29,11 +29,16 @@ import {
   Save,
   Store,
   Edit2,
-  Loader2
+  Loader2,
+  UserRound,
+  Trash2,
+  Archive,
+  RotateCcw,
+  Info
 } from 'lucide-react';
 
 export default function SellerDashboardPage() {
-  const { user, token, openAuthModal, switchPersona } = useAuth();
+  const { user, token, openAuthModal, logout } = useAuth();
   const navigate = useNavigate();
 
   // Active operational sidebar tab
@@ -42,14 +47,23 @@ export default function SellerDashboardPage() {
   const [overview, setOverview] = useState(null);
   const [orders, setOrders] = useState([]);
   const [meals, setMeals] = useState([]);
+  const [archivedMeals, setArchivedMeals] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [customizationOptions, setCustomizationOptions] = useState([]);
   const [plans, setPlans] = useState([]);
+  const [activeSubscribers, setActiveSubscribers] = useState([]);
   const [manifest, setManifest] = useState(null);
   const [earnings, setEarnings] = useState(null);
+  const [earningsError, setEarningsError] = useState(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
   const [settings, setSettings] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState('');
+
+  // Menu sub-tab: 'active' | 'archived'
+  const [menuSubTab, setMenuSubTab] = useState('active');
 
   // Edit Meal State
   const [showEditMealModal, setShowEditMealModal] = useState(false);
@@ -57,6 +71,13 @@ export default function SellerDashboardPage() {
   const [isEditDirty, setIsEditDirty] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+
+  // Delete / Archive Meal State
+  const [showDeleteMealModal, setShowDeleteMealModal] = useState(false);
+  const [deletingMeal, setDeletingMeal] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteDependencyInfo, setDeleteDependencyInfo] = useState(null);
 
   // Modals
   const [showAddMealModal, setShowAddMealModal] = useState(false);
@@ -89,18 +110,33 @@ export default function SellerDashboardPage() {
   const [manifestSlot, setManifestSlot] = useState('lunch');
   const [manifestDate, setManifestDate] = useState(() => new Date().toISOString().split('T')[0]);
 
+  // Currency Formatter - ensures accurate display starting at ₹0.00
+  const formatCurrency = (val) => {
+    const num = Number(val);
+    if (isNaN(num)) return '₹0.00';
+    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   useEffect(() => {
     fetchAllSellerData();
   }, [user]);
 
   const fetchAllSellerData = async () => {
+    if (!user || (user.role !== 'seller' && user.role !== 'admin')) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       await Promise.allSettled([
         fetchOverview(),
         fetchOrders(),
         fetchMeals(),
+        fetchArchivedMeals(),
+        fetchCategories(),
+        fetchCustomizationOptions(),
         fetchPlans(),
+        fetchActiveSubscribers(),
         fetchManifest(),
         fetchEarnings(),
         fetchSettings()
@@ -108,18 +144,9 @@ export default function SellerDashboardPage() {
     } catch (err) {
       console.error('Error loading seller dashboard data:', err);
     } finally {
-      // Ensure defaults if any endpoint was completely empty
-      setOverview(prev => prev || FALLBACK_SELLER_DASHBOARD.overview);
-      setOrders(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_SELLER_DASHBOARD.orders);
-      setMeals(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_SELLER_DASHBOARD.meals);
-      setPlans(prev => (Array.isArray(prev) && prev.length > 0) ? prev : FALLBACK_SELLER_DASHBOARD.plans);
-      setManifest(prev => prev || FALLBACK_SELLER_DASHBOARD.manifest);
-      setEarnings(prev => prev || FALLBACK_SELLER_DASHBOARD.earnings);
-      setSettings(prev => prev || FALLBACK_SELLER_DASHBOARD.settings);
       setLoading(false);
     }
   };
-
 
   const fetchOverview = async () => {
     const res = await apiFetch('/api/seller/overview');
@@ -135,10 +162,42 @@ export default function SellerDashboardPage() {
   };
 
   const fetchMeals = async () => {
-    const res = await apiFetch('/api/seller/meals');
+    const res = await apiFetch('/api/seller/meals?status=active');
     if (res.ok) {
       const data = await safeJson(res);
       setMeals(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const fetchArchivedMeals = async () => {
+    const res = await apiFetch('/api/seller/meals?status=archived');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setArchivedMeals(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await apiFetch('/api/catalog/categories');
+      if (res.ok) {
+        const data = await safeJson(res);
+        if (Array.isArray(data)) setCategories(data);
+      }
+    } catch (e) {
+      console.warn('Could not load categories:', e);
+    }
+  };
+
+  const fetchCustomizationOptions = async () => {
+    try {
+      const res = await apiFetch('/api/seller/customization-options');
+      if (res.ok) {
+        const data = await safeJson(res);
+        if (Array.isArray(data)) setCustomizationOptions(data);
+      }
+    } catch (e) {
+      console.warn('Could not load customization options:', e);
     }
   };
 
@@ -150,14 +209,36 @@ export default function SellerDashboardPage() {
     }
   };
 
+  const fetchActiveSubscribers = async () => {
+    const res = await apiFetch('/api/seller/subscriptions');
+    if (res.ok) {
+      const data = await safeJson(res);
+      setActiveSubscribers(Array.isArray(data) ? data : []);
+    }
+  };
+
   const fetchManifest = async () => {
     const res = await apiFetch(`/api/seller/batch-manifest?date=${manifestDate}&slot=${manifestSlot}`);
     if (res.ok) setManifest(await safeJson(res));
   };
 
   const fetchEarnings = async () => {
-    const res = await apiFetch('/api/seller/earnings');
-    if (res.ok) setEarnings(await safeJson(res));
+    setEarningsLoading(true);
+    setEarningsError(null);
+    try {
+      const res = await apiFetch('/api/seller/earnings');
+      if (res.ok) {
+        const data = await safeJson(res);
+        setEarnings(data);
+      } else {
+        const errData = await safeJson(res);
+        setEarningsError(errData.error || 'Failed to retrieve authenticated earnings record.');
+      }
+    } catch (err) {
+      setEarningsError('Network error connecting to payment records. Please retry.');
+    } finally {
+      setEarningsLoading(false);
+    }
   };
 
   const fetchSettings = async () => {
@@ -175,6 +256,7 @@ export default function SellerDashboardPage() {
       if (res.ok) {
         fetchOrders();
         fetchOverview();
+        fetchEarnings();
       }
     } catch (err) {
       alert('Error updating order milestone.');
@@ -194,7 +276,7 @@ export default function SellerDashboardPage() {
     }
   };
 
-  // Open Edit Dish Modal with prefilled values
+  // Open Edit Dish Modal with prefilled values including customization options
   const handleOpenEditMeal = (meal) => {
     setEditingMeal({
       id: meal.id,
@@ -215,11 +297,23 @@ export default function SellerDashboardPage() {
       image_url: meal.image_url || '',
       is_available: Boolean(meal.is_available),
       is_tiffin_eligible: Boolean(meal.is_tiffin_eligible),
+      customization_option_ids: Array.isArray(meal.customization_option_ids) ? [...meal.customization_option_ids] : [],
       updated_at: meal.updated_at
     });
     setIsEditDirty(false);
     setEditError('');
     setShowEditMealModal(true);
+  };
+
+  // Toggle single customization option in editingMeal
+  const handleToggleCustomizationOption = (optId) => {
+    if (!editingMeal) return;
+    const current = editingMeal.customization_option_ids || [];
+    const updated = current.includes(optId)
+      ? current.filter(id => id !== optId)
+      : [...current, optId];
+    setEditingMeal({ ...editingMeal, customization_option_ids: updated });
+    setIsEditDirty(true);
   };
 
   // Close Edit Dish Modal with unsaved changes verification
@@ -249,6 +343,11 @@ export default function SellerDashboardPage() {
       setEditError('Base price must be a valid positive amount in ₹.');
       return;
     }
+    const prepNum = parseInt(editingMeal.prep_time_minutes, 10);
+    if (isNaN(prepNum) || prepNum < 5) {
+      setEditError('Preparation time must be at least 5 minutes.');
+      return;
+    }
 
     setEditSaving(true);
     setEditError('');
@@ -272,7 +371,7 @@ export default function SellerDashboardPage() {
         dietary_tags: typeof editingMeal.dietary_tags === 'string'
           ? editingMeal.dietary_tags.split(',').map(s => s.trim()).filter(Boolean)
           : editingMeal.dietary_tags,
-        prep_time_minutes: parseInt(editingMeal.prep_time_minutes, 10) || 25,
+        prep_time_minutes: prepNum,
         calories: editingMeal.calories ? parseInt(editingMeal.calories, 10) : null,
         protein_grams: editingMeal.protein_grams ? parseFloat(editingMeal.protein_grams) : null,
         carbs_grams: editingMeal.carbs_grams ? parseFloat(editingMeal.carbs_grams) : null,
@@ -280,6 +379,7 @@ export default function SellerDashboardPage() {
         image_url: editingMeal.image_url ? editingMeal.image_url.trim() : null,
         is_available: Boolean(editingMeal.is_available),
         is_tiffin_eligible: Boolean(editingMeal.is_tiffin_eligible),
+        customization_option_ids: editingMeal.customization_option_ids || [],
         client_last_updated: editingMeal.updated_at
       };
 
@@ -302,6 +402,77 @@ export default function SellerDashboardPage() {
       setEditError(err.message || 'Error updating meal');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  // Open Delete / Archive Confirmation Modal
+  const handleOpenDeleteMeal = (meal) => {
+    setDeletingMeal(meal);
+    setDeleteError('');
+    setDeleteDependencyInfo(null);
+    setShowDeleteMealModal(true);
+  };
+
+  // Close Delete Confirmation Modal
+  const handleCloseDeleteMeal = () => {
+    if (isDeleting) return;
+    setShowDeleteMealModal(false);
+    setDeletingMeal(null);
+    setDeleteError('');
+    setDeleteDependencyInfo(null);
+  };
+
+  // Confirm Soft-Delete / Archive Meal
+  const handleConfirmDeleteMeal = async () => {
+    if (!deletingMeal || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError('');
+    setDeleteDependencyInfo(null);
+
+    try {
+      const res = await apiFetch(`/api/seller/meals/${deletingMeal.id}`, {
+        method: 'DELETE'
+      });
+      const data = await safeJson(res);
+
+      if (res.status === 409 || data.blocked) {
+        // Dependency conflict found: meal is needed by upcoming tiffin deliveries or active subscriptions
+        setDeleteDependencyInfo(data);
+        setDeleteError(data.error || data.explanation || 'Meal is required by active subscription deliveries.');
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to archive meal from menu.');
+      }
+
+      // Soft delete succeeded
+      setShowDeleteMealModal(false);
+      setDeletingMeal(null);
+      await Promise.all([fetchMeals(), fetchArchivedMeals()]);
+      alert(`"${data.meal?.name || 'Dish'}" was archived. It has been removed from new customer purchases.`);
+    } catch (err) {
+      setDeleteError(err.message || 'An unexpected error occurred while deleting meal.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Restore Archived Meal
+  const handleRestoreMeal = async (meal) => {
+    try {
+      const res = await apiFetch(`/api/seller/meals/${meal.id}/restore`, {
+        method: 'PUT'
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        alert(data.error || 'Failed to restore meal to active menu.');
+        return;
+      }
+      await Promise.all([fetchMeals(), fetchArchivedMeals()]);
+      alert(`"${data.meal?.name || 'Dish'}" has been restored to your active kitchen menu and customer catalog.`);
+    } catch (err) {
+      alert('Error restoring meal to active menu.');
     }
   };
 
@@ -394,6 +565,108 @@ export default function SellerDashboardPage() {
     );
   }
 
+  if (!user) {
+    return (
+      <div style={{ maxWidth: '480px', margin: '4rem auto', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+        <div style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '16px',
+          background: 'linear-gradient(135deg, #EA580C 0%, #C2410C 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 1.25rem',
+          color: '#FFFFFF'
+        }}>
+          <Store size={28} />
+        </div>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
+          Kitchen Partner Sign In Required
+        </h2>
+        <p style={{ color: '#64748B', fontSize: '0.9rem', margin: '0 0 1.5rem', lineHeight: 1.5 }}>
+          Please sign in with your registered Kitchen Partner account to manage dishes, active orders, and batch dispatches.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => openAuthModal({ mode: 'signin', accountType: 'seller' })}
+            style={{
+              padding: '12px',
+              fontWeight: 700,
+              backgroundColor: '#EA580C',
+              borderColor: '#EA580C',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <Store size={18} />
+            <span>Sign In as Kitchen Partner</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => navigate('/')}
+            style={{ padding: '10px', fontWeight: 600 }}
+          >
+            Return to Customer Storefront
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (user.role !== 'seller' && user.role !== 'admin') {
+    return (
+      <div style={{ maxWidth: '520px', margin: '4rem auto', padding: '2.5rem', background: '#FFFFFF', borderRadius: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', textAlign: 'center' }}>
+        <div style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '16px',
+          backgroundColor: '#FFF7ED',
+          color: '#EA580C',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 1.25rem'
+        }}>
+          <AlertCircle size={32} />
+        </div>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', margin: '0 0 0.5rem' }}>
+          Kitchen Partner Access Only
+        </h2>
+        <p style={{ color: '#64748B', fontSize: '0.92rem', margin: '0 0 1.5rem', lineHeight: 1.5 }}>
+          You are currently signed in as <b>{user.email}</b> (Role: <b>{user.role}</b>). Access to the Kitchen Operations portal is restricted to registered Kitchen Partners.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={async () => {
+              await logout();
+              openAuthModal({ mode: 'signin', accountType: 'seller' });
+            }}
+            style={{ padding: '10px', fontWeight: 600 }}
+          >
+            Sign Out and Switch to Partner Account
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate('/')}
+            style={{ padding: '10px', fontWeight: 600 }}
+          >
+            Return to Customer Storefront
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const seller = overview?.seller || settings;
   const isApproved = seller?.verification_status === 'approved';
@@ -486,43 +759,6 @@ export default function SellerDashboardPage() {
 
       {/* 2. Main Work Area */}
       <main style={{ flex: 1, padding: '28px 32px', overflowY: 'auto' }}>
-        {(!user || user.role !== 'seller') && (
-          <div style={{
-            backgroundColor: '#FFF7ED',
-            border: '1.5px solid #FDBA74',
-            borderRadius: '12px',
-            padding: '12px 20px',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '12px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '1.3rem' }}>👨‍🍳</span>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#9A3412' }}>
-                  Kitchen Operations Portal • Annapurna Homestyle Tiffin Ghar
-                </div>
-                <div style={{ fontSize: '0.78rem', color: '#C2410C' }}>
-                  Instant access enabled. Live order milestones, batch dispatch manifest &amp; menu controls are active.
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-sm btn-outline"
-                onClick={() => switchPersona('customer')}
-                style={{ fontSize: '0.78rem', padding: '5px 12px', borderColor: '#EA580C', color: '#EA580C' }}
-              >
-                🛒 Customer Store
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Verification Status Banner for Pending/Rejected Sellers */}
         {!isApproved && (
           <div style={{
@@ -579,7 +815,7 @@ export default function SellerDashboardPage() {
               <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>GROSS REVENUE</span>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10B981', marginTop: '6px' }}>
-                  ₹{overview?.stats?.total_revenue_inr ?? overview?.today_revenue ?? 8460}
+                  {formatCurrency(0)}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>From delivered customer orders</div>
               </div>
@@ -587,7 +823,7 @@ export default function SellerDashboardPage() {
               <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>ACTIVE SUBSCRIBERS</span>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#6366F1', marginTop: '6px' }}>
-                  {overview?.stats?.active_subscriptions_count ?? overview?.active_subscriptions_count ?? 68}
+                  {overview?.stats?.active_subscriptions_count ?? overview?.active_subscriptions_count ?? 0}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Enrolled in daily tiffin routine</div>
               </div>
@@ -595,7 +831,7 @@ export default function SellerDashboardPage() {
               <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>TODAY'S ORDERS</span>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#F59E0B', marginTop: '6px' }}>
-                  {overview?.stats?.today_orders_count ?? overview?.today_orders_count ?? 42}
+                  {overview?.stats?.today_orders_count ?? overview?.today_orders_count ?? 0}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Placed in past 24 hours</div>
               </div>
@@ -603,7 +839,7 @@ export default function SellerDashboardPage() {
               <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
                 <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>LIVE TICKETS</span>
                 <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#EA580C', marginTop: '6px' }}>
-                  {overview?.stats?.active_kitchen_tickets ?? overview?.pending_orders_count ?? 3}
+                  {overview?.stats?.active_kitchen_tickets ?? overview?.pending_orders_count ?? 0}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Preparing or ready for pickup</div>
               </div>
@@ -755,70 +991,223 @@ export default function SellerDashboardPage() {
         {/* TAB 3: MENU CATALOG */}
         {activeTab === 'menu' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>
-                  Kitchen Menu ({meals.length} Dishes)
+                  Kitchen Menu Management
                 </h1>
                 <p style={{ color: '#64748B', margin: 0, fontSize: '0.92rem' }}>
-                  Manage dish availability, prices, and add new recipes
+                  Manage dishes, price and portions, custom add-ons, and menu availability
                 </p>
               </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => { fetchMeals(); fetchArchivedMeals(); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RefreshCw size={14} /> Refresh Menu
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setShowAddMealModal(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Plus size={16} /> Add New Dish
+                </button>
+              </div>
+            </div>
+
+            {/* Menu Sub-tabs: Active Dishes vs Archived Dishes */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #E2E8F0', marginBottom: '20px' }}>
               <button
                 type="button"
-                className="btn btn-primary"
-                onClick={() => setShowAddMealModal(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => setMenuSubTab('active')}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                  color: menuSubTab === 'active' ? '#EA580C' : '#64748B',
+                  borderBottom: menuSubTab === 'active' ? '3px solid #EA580C' : '3px solid transparent',
+                  marginBottom: '-2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.15s ease'
+                }}
               >
-                <Plus size={16} /> Add New Dish
+                <span>Active Dishes</span>
+                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '999px', background: menuSubTab === 'active' ? '#FFEDD5' : '#F1F5F9', color: menuSubTab === 'active' ? '#C2410C' : '#64748B' }}>
+                  {meals.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMenuSubTab('archived')}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                  color: menuSubTab === 'archived' ? '#EA580C' : '#64748B',
+                  borderBottom: menuSubTab === 'archived' ? '3px solid #EA580C' : '3px solid transparent',
+                  marginBottom: '-2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Archive size={16} />
+                  <span>Archived Dishes</span>
+                </div>
+                <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '999px', background: menuSubTab === 'archived' ? '#FFEDD5' : '#F1F5F9', color: menuSubTab === 'archived' ? '#C2410C' : '#64748B' }}>
+                  {archivedMeals.length}
+                </span>
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-              {meals.map(meal => (
-                <div key={meal.id} style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ height: '150px', position: 'relative' }}>
-                    <ImageWithFallback src={meal.image_url} alt={meal.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: meal.is_available ? '#10B981' : '#EF4444', color: '#FFF', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
-                      {meal.is_available ? 'In Stock' : 'Out of Stock'}
-                    </div>
-                  </div>
+            {/* Active Sub-tab Content */}
+            {menuSubTab === 'active' && (
+              meals.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                  <ChefHat size={48} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>No Active Dishes in Menu</h3>
+                  <p style={{ color: '#64748B', margin: '0 0 16px', fontSize: '0.9rem' }}>Add your kitchen dishes to begin receiving individual and tiffin subscription orders.</p>
+                  <button className="btn btn-primary" onClick={() => setShowAddMealModal(true)}>
+                    <Plus size={16} style={{ marginRight: '6px' }} /> Add First Dish
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                  {meals.map(meal => (
+                    <div key={meal.id} style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ height: '150px', position: 'relative' }}>
+                        <ImageWithFallback src={meal.image_url} alt={meal.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: meal.is_available ? '#10B981' : '#EF4444', color: '#FFF', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                          {meal.is_available ? 'In Stock' : 'Out of Stock'}
+                        </div>
+                        {meal.is_tiffin_eligible && (
+                          <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(15, 23, 42, 0.85)', color: '#FDBA74', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, backdropFilter: 'blur(4px)' }}>
+                            🍱 Tiffin Eligible
+                          </div>
+                        )}
+                      </div>
 
-                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 4px', color: '#0F172A' }}>
-                      {meal.name}
-                    </h4>
-                    <p style={{ fontSize: '0.82rem', color: '#64748B', margin: '0 0 12px', flex: 1 }}>
-                      {meal.description}
-                    </p>
+                      <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '6px', marginBottom: '4px' }}>
+                          <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0F172A' }}>
+                            {meal.name}
+                          </h4>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginBottom: '8px' }}>
+                          ID: <code>{meal.id}</code> • {meal.cuisine || 'Homestyle'}
+                        </div>
+                        <p style={{ fontSize: '0.82rem', color: '#64748B', margin: '0 0 12px', flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {meal.description}
+                        </p>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
-                      <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
-                        ₹{meal.base_price}
-                      </span>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => handleOpenEditMeal(meal)}
-                          style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', borderColor: '#CBD5E1', color: '#1E293B' }}
-                        >
-                          <Edit2 size={13} /> Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => handleToggleMealAvailability(meal)}
-                          style={{ fontSize: '0.8rem' }}
-                        >
-                          {meal.is_available ? 'Mark Out of Stock' : 'Enable in Menu'}
-                        </button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                          <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
+                            {formatCurrency(meal.base_price)}
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => handleOpenEditMeal(meal)}
+                              style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', borderColor: '#CBD5E1', color: '#1E293B' }}
+                              title="Edit meal details"
+                            >
+                              <Edit2 size={13} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => handleOpenDeleteMeal(meal)}
+                              style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', borderColor: '#FCA5A5', color: '#DC2626' }}
+                              title="Archive/Delete dish from menu"
+                            >
+                              <Trash2 size={13} /> Delete
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => handleToggleMealAvailability(meal)}
+                              style={{ fontSize: '0.78rem' }}
+                              title={meal.is_available ? 'Mark temporarily unavailable' : 'Make available for orders'}
+                            >
+                              {meal.is_available ? 'Out of Stock' : 'In Stock'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )
+            )}
+
+            {/* Archived Sub-tab Content */}
+            {menuSubTab === 'archived' && (
+              archivedMeals.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                  <Archive size={48} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>No Archived Dishes</h3>
+                  <p style={{ color: '#64748B', margin: 0, fontSize: '0.9rem' }}>
+                    When you remove a dish from your active menu, it is preserved here safely. Past customer orders and historical pricing will never be damaged.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                  {archivedMeals.map(meal => (
+                    <div key={meal.id} style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: 0.9 }}>
+                      <div style={{ height: '140px', position: 'relative', filter: 'grayscale(40%)' }}>
+                        <ImageWithFallback src={meal.image_url} alt={meal.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', top: '10px', right: '10px', background: '#475569', color: '#FFF', padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                          Archived
+                        </div>
+                      </div>
+
+                      <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                        <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: '0 0 4px', color: '#0F172A' }}>
+                          {meal.name}
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: '#64748B', marginBottom: '8px' }}>
+                          Archived on: {meal.archived_at ? new Date(meal.archived_at).toLocaleDateString('en-IN') : 'Recent'}
+                        </div>
+                        <p style={{ fontSize: '0.82rem', color: '#64748B', margin: '0 0 12px', flex: 1 }}>
+                          {meal.description}
+                        </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F1F5F9', paddingTop: '10px' }}>
+                          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: '#475569' }}>
+                            {formatCurrency(meal.base_price)}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => handleRestoreMeal(meal)}
+                            style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', borderColor: '#10B981', color: '#059669', fontWeight: 700 }}
+                          >
+                            <RotateCcw size={14} /> Restore to Menu
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
           </div>
         )}
 
@@ -843,6 +1232,56 @@ export default function SellerDashboardPage() {
                 <Plus size={16} /> Create Tiffin Plan
               </button>
             </div>
+
+            <section style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '20px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>
+                    Active Subscribers ({activeSubscribers.length})
+                  </h2>
+                  <p style={{ color: '#64748B', margin: 0, fontSize: '0.85rem' }}>
+                    Customer contact and delivery details, with the plan each customer selected.
+                  </p>
+                </div>
+                <button type="button" className="btn btn-outline btn-sm" onClick={fetchActiveSubscribers} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <RefreshCw size={14} /> Refresh subscribers
+                </button>
+              </div>
+
+              {activeSubscribers.length === 0 ? (
+                <div style={{ padding: '24px', borderRadius: '10px', background: '#F8FAFC', color: '#64748B', fontSize: '0.9rem', textAlign: 'center' }}>
+                  No active subscribers yet.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '14px' }}>
+                  {activeSubscribers.map(subscription => {
+                    const address = subscription.delivery_address;
+                    const customer = subscription.customer;
+                    return (
+                      <article key={subscription.id} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '16px', background: '#F8FAFC' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'flex-start', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', gap: '9px', minWidth: 0 }}>
+                            <UserRound size={18} color="#4F46E5" style={{ marginTop: '2px', flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontWeight: 800, color: '#0F172A' }}>{customer?.full_name || 'Customer'}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '2px' }}>{subscription.subscription_number || subscription.id}</div>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#047857', background: '#D1FAE5', padding: '3px 7px', borderRadius: '999px' }}>ACTIVE</span>
+                        </div>
+                        <div style={{ display: 'grid', gap: '7px', fontSize: '0.84rem', color: '#334155' }}>
+                          <div><strong>Plan:</strong> {subscription.plan?.name || 'Plan unavailable'}{subscription.plan?.plan_type ? ` (${subscription.plan.plan_type.replaceAll('_', ' ')})` : ''}</div>
+                          <div><strong>Meal slot:</strong> {subscription.slot || 'Not specified'}</div>
+                          <div><strong>Phone:</strong> {customer?.phone || address?.phone || 'Not provided'}</div>
+                          <div><strong>Email:</strong> {customer?.email || 'Not provided'}</div>
+                          <div><strong>Delivery address:</strong> {address ? [address.street_address, address.landmark, address.area, address.city, address.pincode].filter(Boolean).join(', ') : 'Not provided'}</div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
             {plans.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '4rem 2rem', background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
@@ -1003,58 +1442,137 @@ export default function SellerDashboardPage() {
         )}
 
         {/* TAB 6: EARNINGS & PAYOUTS */}
-        {activeTab === 'earnings' && earnings && (
+        {activeTab === 'earnings' && (
           <div>
-            <div style={{ marginBottom: '20px' }}>
-              <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>
-                Earnings &amp; Payouts
-              </h1>
-              <p style={{ color: '#64748B', margin: 0, fontSize: '0.92rem' }}>
-                Settlement breakdown of completed single meal orders and subscription disbursements
-              </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>
+                  Earnings &amp; Payouts
+                </h1>
+                <p style={{ color: '#64748B', margin: 0, fontSize: '0.92rem' }}>
+                  Settlement breakdown of completed food orders and subscription disbursements
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={fetchEarnings}
+                disabled={earningsLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={14} className={earningsLoading ? 'spin' : ''} /> Refresh Statement
+              </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '28px' }}>
-              <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>GROSS SALES</span>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', marginTop: '6px' }}>
-                  ₹{earnings?.summary?.gross_revenue ?? earnings?.total_revenue ?? 168400}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Combined orders &amp; plans</div>
+            {/* Error / Retry State if financial data cannot load */}
+            {earningsError && (
+              <div style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', borderRadius: '12px', padding: '24px', textAlign: 'center', marginBottom: '24px' }}>
+                <AlertCircle size={36} color="#DC2626" style={{ margin: '0 auto 12px' }} />
+                <h3 style={{ color: '#991B1B', fontWeight: 800, fontSize: '1.15rem', marginBottom: '6px' }}>
+                  Financial Statement Unavailable
+                </h3>
+                <p style={{ color: '#7F1D1D', fontSize: '0.9rem', marginBottom: '16px' }}>
+                  {earningsError}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={fetchEarnings}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RefreshCw size={14} /> Retry Loading Financials
+                </button>
               </div>
+            )}
 
-              <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>PLATFORM COMMISSION</span>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#EF4444', marginTop: '6px' }}>
-                  {earnings?.summary?.platform_fee_percent ?? 10}%
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Technology &amp; dispatch fee</div>
+            {/* Loading State */}
+            {earningsLoading && !earnings && (
+              <div style={{ textAlign: 'center', padding: '3rem', background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                <Loader2 size={32} color="#EA580C" className="spin" style={{ margin: '0 auto 10px' }} />
+                <p style={{ color: '#64748B', fontWeight: 600 }}>Calculating authenticated seller statement...</p>
               </div>
+            )}
 
-              <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>NET PAYABLE</span>
-                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10B981', marginTop: '6px' }}>
-                  ₹{earnings?.summary?.net_payout ?? earnings?.net_payout ?? 151560}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Direct bank disbursement</div>
-              </div>
-            </div>
-
-            <div style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '20px' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0F172A', marginBottom: '14px' }}>Recent Settled Orders</h3>
-              {earnings.recent_orders?.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {earnings.recent_orders.map(o => (
-                    <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F1F5F9', fontSize: '0.9rem' }}>
-                      <span>Order #{o.order_number || o.id} ({new Date(o.created_at).toLocaleDateString()})</span>
-                      <span style={{ fontWeight: 700, color: '#10B981' }}>+₹{o.grand_total}</span>
+            {/* Financial Cards (Accurate Server-side calculations starting at ₹0.00) */}
+            {earnings && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '18px', marginBottom: '24px' }}>
+                  <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>GROSS SALES</span>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A', marginTop: '6px' }}>
+                      {formatCurrency(earnings?.summary?.gross_revenue ?? 0)}
                     </div>
-                  ))}
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Delivered orders &amp; active subscriptions</div>
+                  </div>
+
+                  <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>TODAY'S EARNINGS</span>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#059669', marginTop: '6px' }}>
+                      {formatCurrency(earnings?.summary?.today_earnings ?? 0)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Net settled past 24 hours</div>
+                  </div>
+
+                  <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>AVAILABLE BALANCE</span>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#2563EB', marginTop: '6px' }}>
+                      {formatCurrency(earnings?.summary?.available_balance ?? 0)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Cleared for instant bank transfer</div>
+                  </div>
+
+                  <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>PENDING PAYOUTS</span>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#D97706', marginTop: '6px' }}>
+                      {formatCurrency(earnings?.summary?.pending_payouts ?? 0)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Processing in current cycle</div>
+                  </div>
                 </div>
-              ) : (
-                <div style={{ color: '#64748B', fontSize: '0.9rem' }}>No settled orders in this billing cycle yet.</div>
-              )}
-            </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '18px', marginBottom: '28px' }}>
+                  <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>PLATFORM COMMISSION</span>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#DC2626', marginTop: '4px' }}>
+                      {earnings?.summary?.platform_fee_percent ?? 10}% ({formatCurrency(earnings?.summary?.platform_fee_amount ?? 0)})
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Technology &amp; dispatch service fee</div>
+                  </div>
+
+                  <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '14px', border: '1px solid #E2E8F0' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase' }}>REFUNDS &amp; CHARGEBACKS</span>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#64748B', marginTop: '4px' }}>
+                      {formatCurrency(earnings?.summary?.refunds_amount ?? 0)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Customer returns / cancellations</div>
+                  </div>
+
+                  <div style={{ background: '#FFFFFF', padding: '18px', borderRadius: '14px', border: '2px solid #10B981', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.1)' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#047857', fontWeight: 800, textTransform: 'uppercase' }}>NET PAYABLE TO SELLER</span>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#059669', marginTop: '4px' }}>
+                      {formatCurrency(earnings?.summary?.net_payout ?? 0)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#047857', marginTop: '4px' }}>Gross sales minus platform fee</div>
+                  </div>
+                </div>
+
+                <div style={{ background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', padding: '20px' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0F172A', marginBottom: '14px' }}>Recent Settled Orders</h3>
+                  {earnings.recent_orders?.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {earnings.recent_orders.map(o => (
+                        <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #F1F5F9', fontSize: '0.9rem' }}>
+                          <span>Order #{o.order_number || o.id} ({new Date(o.created_at).toLocaleDateString()})</span>
+                          <span style={{ fontWeight: 700, color: '#10B981' }}>+{formatCurrency(o.grand_total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: '#64748B', fontSize: '0.9rem', padding: '12px 0' }}>No qualifying settled orders for this seller yet. Newly registered kitchens start at {formatCurrency(0)}.</div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1373,11 +1891,19 @@ export default function SellerDashboardPage() {
                       setIsEditDirty(true);
                     }}
                   >
-                    <option value="cat_north_indian">North Indian</option>
-                    <option value="cat_south_indian">South Indian</option>
-                    <option value="cat_healthy_bowls">Healthy Bowls</option>
-                    <option value="cat_high_protein">High Protein</option>
-                    <option value="cat_tiffin_combos">Tiffin Combos</option>
+                    {categories.length > 0 ? (
+                      categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="cat_north_indian">North Indian</option>
+                        <option value="cat_south_indian">South Indian</option>
+                        <option value="cat_healthy_bowls">Healthy Bowls</option>
+                        <option value="cat_high_protein">High Protein</option>
+                        <option value="cat_tiffin_combos">Tiffin Combos</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
@@ -1396,6 +1922,14 @@ export default function SellerDashboardPage() {
                   }}
                   placeholder="https://..."
                 />
+                {editingMeal.image_url && (
+                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '12px', background: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ width: '60px', height: '48px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0 }}>
+                      <ImageWithFallback src={editingMeal.image_url} alt="Dish Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <span style={{ fontSize: '0.78rem', color: '#64748B' }}>Live image preview for customer storefront</span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1477,6 +2011,68 @@ export default function SellerDashboardPage() {
                   }}
                   placeholder="Paneer, Tomatoes, Fresh Herbs, Spices"
                 />
+              </div>
+
+              {/* Supported Customization Options */}
+              <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1E293B' }}>
+                    Supported Customization Options (Build Your Own / Add-ons)
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                    {(editingMeal.customization_option_ids || []).length} selected
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '0.78rem', color: '#64748B' }}>
+                  Select which meal customization options customers may configure when ordering this dish.
+                </p>
+
+                {customizationOptions.length > 0 ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                    {customizationOptions.map(opt => {
+                      const isChecked = (editingMeal.customization_option_ids || []).includes(opt.id);
+                      return (
+                        <label
+                          key={opt.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 10px',
+                            background: isChecked ? '#EFF6FF' : '#FFFFFF',
+                            border: isChecked ? '1.5px solid #3B82F6' : '1px solid #E2E8F0',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleCustomizationOption(opt.id)}
+                            style={{ accentColor: '#2563EB' }}
+                          />
+                          <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontWeight: 600, color: '#1E293B' }}>{opt.name || opt.item_choice}</span>
+                            <span style={{ color: '#64748B', fontSize: '0.72rem', marginLeft: '4px' }}>
+                              ({opt.group_type})
+                            </span>
+                          </div>
+                          {Number(opt.price_delta) > 0 && (
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#059669' }}>
+                              +{formatCurrency(opt.price_delta)}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.78rem', color: '#94A3B8', fontStyle: 'italic' }}>
+                    Loading kitchen customization presets...
+                  </div>
+                )}
               </div>
 
               <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
@@ -1595,6 +2191,129 @@ export default function SellerDashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete / Archive Confirmation Modal */}
+      {showDeleteMealModal && deletingMeal && (
+        <div className="modal-backdrop" style={{ zIndex: 1200 }}>
+          <div className="modal-dialog" style={{ maxWidth: '520px', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '1rem' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Trash2 size={20} color="#DC2626" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 4px', color: '#0F172A' }}>
+                  Remove this meal from your menu?
+                </h3>
+                <p style={{ color: '#64748B', margin: 0, fontSize: '0.88rem' }}>
+                  It will no longer be available for new orders.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseDeleteMeal}
+                disabled={isDeleting}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}
+                title="Cancel"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Meal summary snapshot card */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0', marginBottom: '1rem' }}>
+              <div style={{ width: '64px', height: '56px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+                <ImageWithFallback src={deletingMeal.image_url} alt={deletingMeal.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {deletingMeal.name}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                  {formatCurrency(deletingMeal.base_price)} • {deletingMeal.cuisine || 'Homestyle'}
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                  Meal ID: <code>{deletingMeal.id}</code>
+                </div>
+              </div>
+            </div>
+
+            {/* Dependency Conflict Display (HTTP 409 from server) */}
+            {deleteDependencyInfo && (
+              <div style={{ background: '#FEF2F2', border: '1.5px solid #FCA5A5', borderRadius: '10px', padding: '14px', marginBottom: '1.25rem', color: '#991B1B' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, fontSize: '0.92rem', marginBottom: '6px' }}>
+                  <AlertCircle size={18} color="#DC2626" />
+                  <span>Removal Blocked: Active Tiffin Dependencies Found</span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                  {deleteDependencyInfo.explanation || 'This meal is currently assigned to upcoming subscription deliveries.'}
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #FECACA', fontSize: '0.78rem', textAlign: 'center' }}>
+                  <div>
+                    <div style={{ color: '#64748B', fontWeight: 600 }}>Active Subs</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#DC2626' }}>{deleteDependencyInfo.active_subscriptions_count ?? 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontWeight: 600 }}>Upcoming Deliveries</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#DC2626' }}>{deleteDependencyInfo.upcoming_deliveries_count ?? 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontWeight: 600 }}>Next Scheduled</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#DC2626', marginTop: '2px' }}>{deleteDependencyInfo.next_delivery_date || 'Today'}</div>
+                  </div>
+                </div>
+                <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: '#7F1D1D' }}>
+                  👉 <b>Action required:</b> Please reassign a valid replacement dish in your daily tiffin schedule or resolve active deliveries before archiving this meal.
+                </p>
+              </div>
+            )}
+
+            {/* General Delete Error */}
+            {deleteError && !deleteDependencyInfo && (
+              <div style={{ padding: '10px 14px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#B91C1C', fontSize: '0.85rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={16} />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleCloseDeleteMeal}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={handleConfirmDeleteMeal}
+                disabled={isDeleting || Boolean(deleteDependencyInfo?.blocked)}
+                style={{
+                  backgroundColor: Boolean(deleteDependencyInfo?.blocked) ? '#9CA3AF' : '#DC2626',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: (isDeleting || Boolean(deleteDependencyInfo?.blocked)) ? 'not-allowed' : 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={16} className="spin" /> Deleting Meal...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} /> Delete Meal
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

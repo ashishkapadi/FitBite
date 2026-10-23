@@ -460,3 +460,137 @@ img {
   width: 100%;
 }
 
+/* ==========================================================================
+   Location & Demo Account Portal Modal (Positioning, Focus & Viewport Safety)
+   ========================================================================== */
+.fitbite-location-portal-overlay {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background-color: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: max(16px, env(safe-area-inset-top, 16px)) max(16px, env(safe-area-inset-right, 16px)) max(16px, env(safe-area-inset-bottom, 16px)) max(16px, env(safe-area-inset-left, 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  animation: fitbiteFadeIn 180ms ease-out;
+}
+
+.fitbite-location-dialog {
+  background-color: #FFFFFF;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 500px;
+  min-width: 0;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* CRITICAL: allows flex child to shrink so max-height is respected */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  border: 1px solid #E2E8F0;
+  position: relative;
+  margin: auto 0; /* Auto vertical margins center when fitting; falls back to 0 at top when overflowing */
+  box-sizing: border-box;
+  overflow: hidden;
+  animation: fitbiteScaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform: none !important; /* Avoid conflicting 3D transforms that clip or blur */
+}
+
+/* Header inside dialog is pinned and never clipped */
+.fitbite-location-dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  background-color: #FFFFFF;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Body inside dialog scrolls internally */
+.fitbite-location-dialog-body {
+  padding: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0; /* CRITICAL: allows scrolling without overflowing dialog */
+}
+
+.fitbite-modal-close-btn:hover {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+.fitbite-modal-close-btn:focus-visible {
+  outline: 2px solid #10B981 !important;
+  outline-offset: 2px !important;
+}
+
+@keyframes fitbiteFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fitbiteScaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-height: 600px) {
+  .fitbite-location-portal-overlay {
+    padding: max(8px, env(safe-area-inset-top, 8px)) max(12px, env(safe-area-inset-right, 12px)) max(8px, env(safe-area-inset-bottom, 8px)) max(12px, env(safe-area-inset-left, 12px));
+  }
+  .fitbite-location-dialog {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px !important;
+  }
+  .fitbite-location-dialog-header {
+    padding: 12px 16px;
+  }
+  .fitbite-location-dialog-body {
+    padding: 14px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .fitbite-location-portal-overlay {
+    padding: max(10px, env(safe-area-inset-top, 10px)) max(10px, env(safe-area-inset-right, 10px)) max(10px, env(safe-area-inset-bottom, 10px)) max(10px, env(safe-area-inset-left, 10px));
+  }
+  .fitbite-location-dialog {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: 16px !important;
+    min-width: 0;
+  }
+  .fitbite-location-dialog-header {
+    padding: 14px 16px;
+  }
+  .fitbite-location-dialog-body {
+    padding: 16px;
+  }
+}
+
+

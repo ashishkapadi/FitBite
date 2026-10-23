@@ -391,3 +391,28 @@ export function clearStoredAuthSession() {
   localStorage.removeItem('fitbite_cached_session');
   localStorage.removeItem('fitbite_active_address_id');
 }
+
+/**
+ * Safely determines if a user object corresponds to a demo account
+ */
+export function isDemoAccount(user) {
+  if (!user) return false;
+  if (user.is_demo === true || user.is_demo === 1 || user.is_demo === 'true') return true;
+  if (typeof user.email === 'string' && user.email.toLowerCase().endsWith('@fitbite.demo')) return true;
+  const demoIds = new Set([
+    'user_cust_01',
+    'user_cust_family',
+    'user_sell_01',
+    'user_sell_02',
+    'user_sell_03',
+    'user_sell_04',
+    'user_sell_05',
+    'user_sell_06',
+    'user_sell_07',
+    'user_sell_08',
+    'user_sell_pending',
+    'user_admin_01',
+    'user_deliv_01'
+  ]);
+  return demoIds.has(user.id);
+}

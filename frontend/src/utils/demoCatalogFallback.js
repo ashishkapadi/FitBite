@@ -540,7 +540,7 @@ export const FALLBACK_SELLER_DASHBOARD = {
       active_subscriptions_count: 68,
       today_subscription_lunches: 48,
       today_subscription_dinners: 36,
-      total_revenue_inr: 84600.00
+      total_revenue_inr: 0
     },
     today_orders_count: 42,
     active_subscriptions_count: 68,
@@ -637,6 +637,17 @@ export const FALLBACK_SELLER_DASHBOARD = {
       supported_slots: ['lunch'],
       cycle_days: 28,
       is_active: true
+    }
+  ],
+  activeSubscribers: [
+    {
+      id: 'sub_demo_01',
+      subscription_number: 'SUB-2026-8801',
+      status: 'active',
+      slot: 'lunch',
+      customer: { full_name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul@example.com' },
+      plan: { id: 'sub_plan_01', name: 'Everyday Veg — 28-Day Plan', plan_type: 'working_professional', cycle_days: 28 },
+      delivery_address: { street_address: 'Flat 402, Green Glen Layout, 5th Cross', area: 'Indiranagar', city: 'Bengaluru', pincode: '560038' }
     }
   ],
   manifest: {
@@ -1711,6 +1722,9 @@ export function getFallbackApiResponse(path, options = {}) {
   }
   if (url.includes('/api/seller/meals')) {
     return FALLBACK_SELLER_DASHBOARD.meals;
+  }
+  if (url.includes('/api/seller/subscriptions')) {
+    return FALLBACK_SELLER_DASHBOARD.activeSubscribers;
   }
   if (url.includes('/api/seller/plans')) {
     return FALLBACK_SELLER_DASHBOARD.plans;

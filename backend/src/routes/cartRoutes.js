@@ -27,13 +27,31 @@ router.get('/', requireAuth, async (req, res) => {
 
     const items = await db.find('cart_items', { cart_id: cart.id });
 
-    // Enrich items with meal info
+    // Enrich items with meal info and revalidate availability/archival status
     const enrichedItems = [];
     let subtotal = 0;
-    let customizationTotal = 0;
+    let hasUnpurchasableItems = false;
 
     for (const item of items) {
       const meal = await db.findOne('meals', { id: item.meal_id });
+      let isUnpurchasable = false;
+      let unpurchasableReason = null;
+
+      if (!meal) {
+        isUnpurchasable = true;
+        unpurchasableReason = 'This meal is no longer listed on FitBite.';
+      } else if (meal.is_archived) {
+        isUnpurchasable = true;
+        unpurchasableReason = `"${meal.name}" has been removed from the menu by the kitchen and is no longer available for new orders.`;
+      } else if (!meal.is_available) {
+        isUnpurchasable = true;
+        unpurchasableReason = `"${meal.name}" is currently marked out of stock by the kitchen.`;
+      }
+
+      if (isUnpurchasable) {
+        hasUnpurchasableItems = true;
+      }
+
       enrichedItems.push({
         ...item,
         meal: meal ? {
@@ -42,8 +60,12 @@ router.get('/', requireAuth, async (req, res) => {
           image_url: meal.image_url,
           cuisine: meal.cuisine,
           base_price: meal.base_price,
-          dietary_tags: meal.dietary_tags
-        } : null
+          dietary_tags: meal.dietary_tags,
+          is_available: Boolean(meal.is_available),
+          is_archived: Boolean(meal.is_archived)
+        } : null,
+        is_unpurchasable: isUnpurchasable,
+        unpurchasable_reason: unpurchasableReason
       });
       subtotal += parseFloat(item.total_price);
     }
@@ -64,6 +86,7 @@ router.get('/', requireAuth, async (req, res) => {
       } : null,
       items: enrichedItems,
       item_count: enrichedItems.reduce((acc, i) => acc + i.quantity, 0),
+      has_unpurchasable_items: hasUnpurchasableItems,
       subtotal: Math.round(subtotal * 100) / 100
     });
   } catch (err) {
@@ -88,8 +111,13 @@ router.post(['/add', '/items'], requireAuth, async (req, res) => {
     if (!meal_id) return res.status(400).json({ error: 'meal_id is required.' });
 
     const meal = await db.findOne('meals', { id: meal_id });
-    if (!meal || !meal.is_available) {
-      return res.status(404).json({ error: 'Meal is currently not available.' });
+    if (!meal || meal.is_archived || !meal.is_available) {
+      const msg = !meal 
+        ? 'Meal not found.' 
+        : (meal.is_archived 
+          ? `"${meal.name}" has been removed from the menu and is no longer available for new orders.` 
+          : `"${meal.name}" is currently not available.`);
+      return res.status(404).json({ error: msg });
     }
 
     const targetSeller = await db.findOne('seller_profiles', { id: meal.seller_id });

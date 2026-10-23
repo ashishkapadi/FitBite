@@ -46,7 +46,7 @@ router.get('/sellers/:id', async (req, res) => {
       return res.status(404).json({ error: 'Kitchen not found or not currently active.' });
     }
 
-    const meals = await db.find('meals', { seller_id: seller.id, is_available: true });
+    const meals = await db.find('meals', m => m.seller_id === seller.id && m.is_available && !m.is_archived);
 
     res.json({
       seller,
@@ -89,7 +89,7 @@ router.get('/meals', async (req, res) => {
     let meals = await db.find('meals', m => {
       // Must belong to an active, approved seller
       if (!activeSellerMap.has(m.seller_id)) return false;
-      if (!m.is_available) return false;
+      if (!m.is_available || m.is_archived) return false;
 
       if (resolvedCategoryId && m.category_id !== resolvedCategoryId) return false;
       if (seller_id && m.seller_id !== seller_id) return false;
@@ -147,8 +147,8 @@ router.get('/meals', async (req, res) => {
 router.get('/meals/:id', async (req, res) => {
   try {
     const meal = await db.findOne('meals', { id: req.params.id });
-    if (!meal) {
-      return res.status(404).json({ error: 'Meal not found.' });
+    if (!meal || meal.is_archived) {
+      return res.status(404).json({ error: 'Meal not found or is no longer available on this menu.' });
     }
 
     const seller = await db.findOne('seller_profiles', { id: meal.seller_id });

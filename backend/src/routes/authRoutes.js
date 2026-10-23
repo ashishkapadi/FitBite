@@ -257,7 +257,13 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    // Role check if user selected partner tab on login
+    // Role check if user selected admin or partner tab on login
+    if (requested_role && requested_role === 'admin' && user.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Access denied. Administrator privileges required.'
+      });
+    }
+
     if (requested_role && requested_role === 'seller' && user.role !== 'seller' && user.role !== 'admin') {
       return res.status(403).json({
         error: `This account is registered as a ${user.role}. Please sign in under Customer, or register as a Partner.`

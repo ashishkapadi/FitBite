@@ -514,49 +514,59 @@ export default function CheckoutPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.5rem' }}>
               {cart.items.map((item) => {
                 const removing = isItemRemoving ? isItemRemoving(item.id) : false;
+                const isItemUnpurchasable = Boolean(item.is_unpurchasable || item.meal?.is_archived);
                 return (
-                  <div key={item.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6', opacity: removing ? 0.5 : 1, transition: 'opacity 150ms' }}>
-                    <div style={{ width: '56px', height: '56px', borderRadius: '0.5rem', overflow: 'hidden', flexShrink: 0 }}>
-                      <ImageWithFallback src={item.meal?.image_url} alt={item.meal?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.15rem', color: '#111827' }}>
-                        {item.meal?.name || 'Custom Meal'}
-                      </h4>
-                      <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                        ₹{item.item_price} each • {item.portion_selected || 'Standard'}
+                  <div key={item.id} style={{ display: 'flex', flexDirection: 'column', paddingBottom: '0.75rem', borderBottom: '1px solid #F3F4F6', opacity: removing ? 0.5 : 1, transition: 'opacity 150ms' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                      <div style={{ width: '56px', height: '56px', borderRadius: '0.5rem', overflow: 'hidden', flexShrink: 0 }}>
+                        <ImageWithFallback src={item.meal?.image_url} alt={item.meal?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
-                      {item.customizations && (
-                        <div style={{ fontSize: '0.7rem', color: '#059669', marginTop: '0.15rem' }}>
-                          Base: {item.customizations.base || 'Standard'} • Spice: {item.customizations.spice || 'Medium'}
+
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.15rem', color: '#111827' }}>
+                          {item.meal?.name || 'Custom Meal'}
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                          ₹{item.item_price} each • {item.portion_selected || 'Standard'}
                         </div>
-                      )}
+                        {item.customizations && (
+                          <div style={{ fontSize: '0.7rem', color: '#059669', marginTop: '0.15rem' }}>
+                            Base: {item.customizations.base || 'Standard'} • Spice: {item.customizations.spice || 'Medium'}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111827' }}>
+                          x{item.quantity}
+                        </span>
+                        <button 
+                          type="button"
+                          disabled={removing}
+                          onClick={() => removeFromCart(item.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: removing ? '#9CA3AF' : '#EF4444',
+                            cursor: removing ? 'not-allowed' : 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                          title={removing ? "Removing..." : "Remove"}
+                        >
+                          {removing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#111827' }}>
-                        x{item.quantity}
-                      </span>
-                      <button 
-                        type="button"
-                        disabled={removing}
-                        onClick={() => removeFromCart(item.id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: removing ? '#9CA3AF' : '#EF4444',
-                          cursor: removing ? 'not-allowed' : 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                        title={removing ? "Removing..." : "Remove"}
-                      >
-                        {removing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                      </button>
-                    </div>
+                    {isItemUnpurchasable && (
+                      <div style={{ marginTop: '6px', padding: '6px 10px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '6px', color: '#B91C1C', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                        <span>{item.unpurchasable_reason || 'This dish was recently archived by the kitchen provider and is no longer available. Please remove it to proceed.'}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -592,64 +602,79 @@ export default function CheckoutPage() {
           </div>
 
           {/* Bill Breakdown Box */}
-          {bill && (
-            <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '1rem', padding: '1.75rem', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 1rem', color: '#111827' }}>
-                Bill Details
-              </h3>
+          {bill && (() => {
+            const hasUnpurchasableItems = Boolean(cart?.has_unpurchasable_items || cart?.items?.some(i => i.is_unpurchasable || i.meal?.is_archived));
+            return (
+              <div style={{ background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '1rem', padding: '1.75rem', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 1rem', color: '#111827' }}>
+                  Bill Details
+                </h3>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', color: '#4B5563' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Item Subtotal</span>
-                  <span style={{ fontWeight: 600, color: '#111827' }}>₹{bill.subtotal}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', color: '#4B5563' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Item Subtotal</span>
+                    <span style={{ fontWeight: 600, color: '#111827' }}>₹{bill.subtotal}</span>
+                  </div>
+
+                  {bill.discount_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669', fontWeight: 600 }}>
+                      <span>Coupon Discount ({bill.coupon?.code})</span>
+                      <span>-₹{bill.discount_amount}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Delivery Fee</span>
+                    <span style={{ fontWeight: 600, color: bill.delivery_fee === 0 ? '#059669' : '#111827' }}>
+                      {bill.delivery_fee === 0 ? 'FREE' : `₹${bill.delivery_fee}`}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Taxes (5% GST)</span>
+                    <span style={{ fontWeight: 600, color: '#111827' }}>₹{bill.tax_amount}</span>
+                  </div>
+
+                  <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '0.75rem', marginTop: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#111827' }}>To Pay</span>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#10B981' }}>₹{bill.grand_total}</span>
+                  </div>
                 </div>
 
-                {bill.discount_amount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#059669', fontWeight: 600 }}>
-                    <span>Coupon Discount ({bill.coupon?.code})</span>
-                    <span>-₹{bill.discount_amount}</span>
+                {hasUnpurchasableItems && (
+                  <div style={{ marginTop: '1.25rem', padding: '12px', background: '#FFFBEB', border: '1.5px solid #FCD34D', borderRadius: '8px', color: '#92400E', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div>
+                      <div style={{ fontWeight: 800 }}>Archived Dish Detected</div>
+                      <span>Your cart contains one or more dishes that were archived by the kitchen. Please remove them using the trash button above to proceed with your order.</span>
+                    </div>
                   </div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Delivery Fee</span>
-                  <span style={{ fontWeight: 600, color: bill.delivery_fee === 0 ? '#059669' : '#111827' }}>
-                    {bill.delivery_fee === 0 ? 'FREE' : `₹${bill.delivery_fee}`}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Taxes (5% GST)</span>
-                  <span style={{ fontWeight: 600, color: '#111827' }}>₹{bill.tax_amount}</span>
-                </div>
-
-                <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '0.75rem', marginTop: '0.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#111827' }}>To Pay</span>
-                  <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#10B981' }}>₹{bill.grand_total}</span>
-                </div>
+                {/* Final Submit Button */}
+                <button
+                  className="btn btn-primary"
+                  onClick={handlePlaceOrder}
+                  disabled={submitting || hasUnpurchasableItems}
+                  style={{
+                    width: '100%',
+                    marginTop: '1.5rem',
+                    padding: '1rem',
+                    fontSize: '1.1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    backgroundColor: hasUnpurchasableItems ? '#9CA3AF' : undefined,
+                    cursor: hasUnpurchasableItems ? 'not-allowed' : undefined
+                  }}
+                >
+                  {submitting ? 'Placing Order...' : (hasUnpurchasableItems ? 'Remove Unavailable Dishes to Checkout' : `Pay ₹${bill.grand_total} & Place Order`)}
+                  {!hasUnpurchasableItems && <ArrowRight size={18} />}
+                </button>
               </div>
-
-              {/* Final Submit Button */}
-              <button
-                className="btn btn-primary"
-                onClick={handlePlaceOrder}
-                disabled={submitting}
-                style={{
-                  width: '100%',
-                  marginTop: '1.5rem',
-                  padding: '1rem',
-                  fontSize: '1.1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                {submitting ? 'Placing Order...' : `Pay ₹${bill.grand_total} & Place Order`}
-                <ArrowRight size={18} />
-              </button>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>

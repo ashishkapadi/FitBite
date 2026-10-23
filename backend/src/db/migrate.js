@@ -111,6 +111,23 @@ export async function runMigrations(existingPoolOrConnection = null) {
       }
     }
 
+    // Dynamic schema evolution for existing tables (idempotent ALTER TABLE checks)
+    try {
+      const [colRows] = await connection.query(
+        `SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = ? AND table_name = 'meals'`,
+        [config.database]
+      );
+      const mealCols = new Set(colRows.map(r => (r.COLUMN_NAME || r.column_name).toLowerCase()));
+      if (!mealCols.has('is_archived')) {
+        console.log(`[Migrate] Adding 'is_archived' and 'archived_at' columns to 'meals' table...`);
+        await connection.query(`ALTER TABLE \`meals\` ADD COLUMN \`is_archived\` BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN \`archived_at\` TIMESTAMP NULL DEFAULT NULL;`);
+        await connection.query(`ALTER TABLE \`meals\` ADD INDEX \`idx_meals_archived\` (\`is_archived\`);`);
+        console.log(`[Migrate] 'meals' table schema upgraded successfully.`);
+      }
+    } catch (alterErr) {
+      console.warn(`[Migrate] Notice: meals column evolution check:`, alterErr.message);
+    }
+
     // Verify all required tables exist in the target database
     const [rows] = await connection.query(
       `SELECT table_name FROM information_schema.tables WHERE table_schema = ?`,

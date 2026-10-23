@@ -102,6 +102,21 @@ router.post('/checkout', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Selected kitchen is currently not accepting orders.' });
     }
 
+    // Verify each meal in the cart is active, available, and not archived
+    for (const item of cartItems) {
+      const meal = await db.findOne('meals', { id: item.meal_id });
+      if (!meal || meal.is_archived) {
+        return res.status(400).json({
+          error: `"${meal ? meal.name : 'A dish'}" in your cart has been removed from the menu and is no longer available for order. Please remove it to proceed.`
+        });
+      }
+      if (!meal.is_available) {
+        return res.status(400).json({
+          error: `"${meal.name}" in your cart is currently marked out of stock. Please remove it to proceed.`
+        });
+      }
+    }
+
     // Compute backend subtotal
     let subtotal = 0;
     for (const item of cartItems) {

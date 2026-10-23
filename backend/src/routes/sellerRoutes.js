@@ -27,20 +27,19 @@ router.get('/overview', async (req, res) => {
   try {
     const seller = req.seller;
 
-    const allOrders = await db.find('orders', { seller_id: seller.id });
+    // Filter genuine eligible orders belonging to this seller (exclude artificial demo seed order)
+    const allOrders = await db.find('orders', o => o.seller_id === seller.id && !o.id?.startsWith('ord_demo_'));
     const todayStr = new Date().toISOString().split('T')[0];
 
     const todayOrders = allOrders.filter(o => o.created_at && o.created_at.startsWith(todayStr));
     const activeOrders = allOrders.filter(o => ['confirmed', 'preparing', 'ready_for_pickup'].includes(o.status));
 
-    const completedOrders = allOrders.filter(o => o.status === 'delivered');
-    const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0);
-
     const activeSubs = await db.find('subscriptions', { seller_id: seller.id, status: 'active' });
+    const subIds = new Set(activeSubs.map(s => s.id));
 
-    // Today's scheduled subscription deliveries
+    // Today's scheduled subscription deliveries for this seller's active subscriptions
     const todaySched = await db.find('scheduled_deliveries', d => {
-      return d.delivery_date === todayStr && !d.is_skipped;
+      return d.delivery_date === todayStr && !d.is_skipped && subIds.has(d.subscription_id);
     });
 
     const todayLunchCount = todaySched.filter(d => d.slot === 'lunch').length;
@@ -64,7 +63,9 @@ router.get('/overview', async (req, res) => {
         active_subscriptions_count: activeSubs.length,
         today_subscription_lunches: todayLunchCount,
         today_subscription_dinners: todayDinnerCount,
-        total_revenue_inr: Math.round(totalRevenue * 100) / 100
+        // The overview is an operational dashboard, not a settlement statement.
+        // Keep this deliberately at zero until a separate approved revenue metric is introduced.
+        total_revenue_inr: 0
       }
     });
   } catch (err) {
@@ -73,14 +74,107 @@ router.get('/overview', async (req, res) => {
   }
 });
 
-// 2. Menu Management (Meals)
+// 2. Active subscribers for the seller's own tiffin plans
+router.get('/subscriptions', async (req, res) => {
+  try {
+    const subscriptions = await db.find('subscriptions', subscription => (
+      subscription.seller_id === req.seller.id && subscription.status === 'active'
+    ));
+
+    const enriched = await Promise.all(subscriptions.map(async subscription => {
+      const [customer, plan, address] = await Promise.all([
+        db.findOne('users', { id: subscription.customer_id }),
+        db.findOne('subscription_plans', { id: subscription.plan_id, seller_id: req.seller.id }),
+        db.findOne('addresses', { id: subscription.address_id, user_id: subscription.customer_id })
+      ]);
+
+      return {
+        id: subscription.id,
+        subscription_number: subscription.subscription_number,
+        status: subscription.status,
+        slot: subscription.slot,
+        start_date: subscription.start_date,
+        revised_end_date: subscription.revised_end_date,
+        meals_delivered_count: subscription.meals_delivered_count || 0,
+        total_meals_purchased: subscription.total_meals_purchased || 0,
+        customer: customer ? {
+          full_name: customer.full_name,
+          phone: customer.phone || '',
+          email: customer.email || ''
+        } : null,
+        plan: plan ? {
+          id: plan.id,
+          name: plan.name,
+          plan_type: plan.plan_type,
+          cycle_days: plan.cycle_days
+        } : null,
+        delivery_address: address ? {
+          recipient_name: address.recipient_name || customer?.full_name || '',
+          phone: address.phone || customer?.phone || '',
+          street_address: address.street_address || '',
+          landmark: address.landmark || '',
+          area: address.area || '',
+          city: address.city || '',
+          pincode: address.pincode || ''
+        } : null
+      };
+    }));
+
+    enriched.sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
+    res.json(enriched);
+  } catch (err) {
+    console.error('Seller active subscribers error:', err);
+    res.status(500).json({ error: 'Server error retrieving active subscribers.' });
+  }
+});
+
+// 3. Menu Management (Meals)
 router.get('/meals', async (req, res) => {
   try {
-    const meals = await db.find('meals', { seller_id: req.seller.id });
-    res.json(meals);
+    const { status } = req.query; // 'active' | 'archived' | 'all'
+    const meals = await db.find('meals', m => {
+      if (m.seller_id !== req.seller.id) return false;
+      if (status === 'archived') return Boolean(m.is_archived);
+      if (status === 'all') return true;
+      // Default: active dishes only
+      return !m.is_archived;
+    });
+
+    // Enrich with customization option IDs
+    const enriched = await Promise.all(meals.map(async (m) => {
+      const mappings = await db.find('meal_customization_mappings', { meal_id: m.id });
+      return {
+        ...m,
+        is_archived: Boolean(m.is_archived),
+        customization_option_ids: mappings.map(mp => mp.customization_option_id)
+      };
+    }));
+
+    res.json(enriched);
   } catch (err) {
     console.error('Seller get meals error:', err);
     res.status(500).json({ error: 'Server error retrieving meals.' });
+  }
+});
+
+router.get('/meals/:id', async (req, res) => {
+  try {
+    const meal = await db.findOne('meals', { id: req.params.id });
+    if (!meal) {
+      return res.status(404).json({ error: 'Meal not found in kitchen catalog.' });
+    }
+    if (meal.seller_id !== req.seller.id) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this meal.' });
+    }
+    const mappings = await db.find('meal_customization_mappings', { meal_id: meal.id });
+    res.json({
+      ...meal,
+      is_archived: Boolean(meal.is_archived),
+      customization_option_ids: mappings.map(mp => mp.customization_option_id)
+    });
+  } catch (err) {
+    console.error('Seller get meal error:', err);
+    res.status(500).json({ error: 'Server error retrieving meal.' });
   }
 });
 
@@ -147,9 +241,12 @@ router.post('/meals', async (req, res) => {
 
 router.put('/meals/:id', async (req, res) => {
   try {
-    const meal = await db.findOne('meals', { id: req.params.id, seller_id: req.seller.id });
+    const meal = await db.findOne('meals', { id: req.params.id });
     if (!meal) {
-      return res.status(404).json({ error: 'Meal not found in your kitchen catalog.' });
+      return res.status(404).json({ error: 'Meal not found in kitchen catalog.' });
+    }
+    if (meal.seller_id !== req.seller.id) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this meal.' });
     }
 
     const {
@@ -170,6 +267,7 @@ router.put('/meals/:id', async (req, res) => {
       carbs_grams,
       fat_grams,
       image_url,
+      customization_option_ids,
       client_last_updated
     } = req.body;
 
@@ -196,7 +294,7 @@ router.put('/meals/:id', async (req, res) => {
     }
 
     if (description !== undefined) {
-      updates.description = description.trim();
+      updates.description = description ? description.trim() : '';
     }
 
     if (category_id !== undefined) {
@@ -216,19 +314,27 @@ router.put('/meals/:id', async (req, res) => {
     }
 
     if (portion_choices !== undefined) {
-      updates.portion_choices = Array.isArray(portion_choices) ? portion_choices : [portion_choices];
+      updates.portion_choices = Array.isArray(portion_choices)
+        ? portion_choices
+        : (typeof portion_choices === 'string' ? portion_choices.split(',').map(s => s.trim()).filter(Boolean) : ['Standard Portion']);
     }
 
     if (ingredients !== undefined) {
-      updates.ingredients = Array.isArray(ingredients) ? ingredients : [];
+      updates.ingredients = Array.isArray(ingredients)
+        ? ingredients
+        : (typeof ingredients === 'string' ? ingredients.split(',').map(s => s.trim()).filter(Boolean) : []);
     }
 
     if (allergens !== undefined) {
-      updates.allergens = Array.isArray(allergens) ? allergens : [];
+      updates.allergens = Array.isArray(allergens)
+        ? allergens
+        : (typeof allergens === 'string' ? allergens.split(',').map(s => s.trim()).filter(Boolean) : []);
     }
 
     if (dietary_tags !== undefined) {
-      updates.dietary_tags = Array.isArray(dietary_tags) ? dietary_tags : ['Vegetarian'];
+      updates.dietary_tags = Array.isArray(dietary_tags)
+        ? dietary_tags
+        : (typeof dietary_tags === 'string' ? dietary_tags.split(',').map(s => s.trim()).filter(Boolean) : ['Vegetarian']);
     }
 
     if (is_available !== undefined) {
@@ -241,7 +347,10 @@ router.put('/meals/:id', async (req, res) => {
 
     if (prep_time_minutes !== undefined) {
       const parsedPrep = parseInt(prep_time_minutes, 10);
-      updates.prep_time_minutes = isNaN(parsedPrep) || parsedPrep < 5 ? 25 : parsedPrep;
+      if (isNaN(parsedPrep) || parsedPrep < 5) {
+        return res.status(400).json({ error: 'Preparation time must be at least 5 minutes.' });
+      }
+      updates.prep_time_minutes = parsedPrep;
     }
 
     if (calories !== undefined) {
@@ -265,15 +374,167 @@ router.put('/meals/:id', async (req, res) => {
     }
 
     await db.update('meals', { id: meal.id }, updates);
+
+    // Update customization option mappings if provided
+    if (Array.isArray(customization_option_ids)) {
+      await db.delete('meal_customization_mappings', { meal_id: meal.id });
+      for (const optId of customization_option_ids) {
+        if (!optId) continue;
+        await db.insert('meal_customization_mappings', {
+          id: `mcm_${meal.id.slice(-6)}_${optId.slice(-6)}_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+          meal_id: meal.id,
+          customization_option_id: optId
+        });
+      }
+    }
+
     const updated = await db.findOne('meals', { id: meal.id });
+    const currentMappings = await db.find('meal_customization_mappings', { meal_id: meal.id });
 
     res.json({
       message: `"${updated.name}" updated successfully.`,
-      meal: updated
+      meal: {
+        ...updated,
+        is_archived: Boolean(updated.is_archived),
+        customization_option_ids: currentMappings.map(m => m.customization_option_id)
+      }
     });
   } catch (err) {
     console.error('Seller update meal error:', err);
     res.status(500).json({ error: 'Server error updating meal. Please check inputs and try again.' });
+  }
+});
+
+// Delete/Archive Meal (Soft delete with dependency verification)
+router.delete('/meals/:id', async (req, res) => {
+  try {
+    const meal = await db.findOne('meals', { id: req.params.id });
+    if (!meal) {
+      return res.status(404).json({ error: 'Meal not found in kitchen catalog.' });
+    }
+    if (meal.seller_id !== req.seller.id) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this meal.' });
+    }
+
+    if (meal.is_archived) {
+      return res.status(400).json({ error: 'This meal is already archived.' });
+    }
+
+    // Dependency Check: Check upcoming tiffin deliveries or active subscriptions
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const upcomingDeliveries = await db.find('scheduled_deliveries', d => {
+      const isThisMeal = (d.scheduled_meal_id === meal.id || d.chosen_meal_id === meal.id);
+      const isUpcoming = d.delivery_date >= todayStr;
+      const isPending = ['scheduled', 'preparing'].includes(d.status);
+      return isThisMeal && isUpcoming && isPending && !d.is_skipped;
+    });
+
+    const activeDependencies = [];
+    for (const d of upcomingDeliveries) {
+      const sub = await db.findOne('subscriptions', { id: d.subscription_id });
+      if (sub && sub.status === 'active') {
+        activeDependencies.push({ delivery: d, subscription: sub });
+      }
+    }
+
+    const activeSubIds = new Set(activeDependencies.map(d => d.subscription.id));
+
+    // Check upcoming daily tiffin menus
+    const upcomingMenus = await db.find('daily_tiffin_menus', m => {
+      const isThisMeal = (m.meal_id === meal.id || m.alternative_meal_id === meal.id);
+      return isThisMeal && m.seller_id === req.seller.id && m.menu_date >= todayStr;
+    });
+
+    if (activeDependencies.length > 0 || upcomingMenus.length > 0) {
+      const allDates = [
+        ...activeDependencies.map(d => d.delivery.delivery_date),
+        ...upcomingMenus.map(m => m.menu_date)
+      ].sort();
+      const nextDate = allDates[0] || todayStr;
+      const explanation = `This meal is currently assigned to ${activeDependencies.length} upcoming scheduled tiffin delivery(ies) across ${activeSubIds.size} active subscription(s) (next scheduled: ${nextDate}) and ${upcomingMenus.length} upcoming daily menu(s). Please reassign an alternative meal in your Tiffin Menus or wait until the scheduled delivery cycle concludes before removing this meal.`;
+
+      return res.status(409).json({
+        error: `Cannot remove "${meal.name}" from your menu: It is required by upcoming tiffin deliveries or active subscriptions.`,
+        blocked: true,
+        upcoming_deliveries_count: activeDependencies.length,
+        active_subscriptions_count: activeSubIds.size,
+        upcoming_menu_days_count: upcomingMenus.length,
+        next_delivery_date: nextDate,
+        explanation,
+        dependencies: {
+          upcoming_deliveries_count: activeDependencies.length,
+          active_subscriptions_count: activeSubIds.size,
+          upcoming_menu_days_count: upcomingMenus.length,
+          next_delivery_date: nextDate,
+          explanation
+        }
+      });
+    }
+
+    // Perform safe soft-deletion / archiving
+    // Preserves historical orders, purchased prices, and meal snapshots in order_items
+    await db.update('meals', { id: meal.id }, {
+      is_archived: true,
+      is_available: false,
+      archived_at: new Date().toISOString()
+    });
+
+    const archivedMeal = await db.findOne('meals', { id: meal.id });
+
+    res.json({
+      message: `"${meal.name}" has been removed from your active menu and archived. Historical orders remain intact.`,
+      meal: archivedMeal
+    });
+  } catch (err) {
+    console.error('Seller delete/archive meal error:', err);
+    res.status(500).json({ error: 'Server error archiving meal.' });
+  }
+});
+
+// Restore Archived Meal
+router.put('/meals/:id/restore', async (req, res) => {
+  try {
+    const meal = await db.findOne('meals', { id: req.params.id });
+    if (!meal) {
+      return res.status(404).json({ error: 'Meal not found in kitchen catalog.' });
+    }
+    if (meal.seller_id !== req.seller.id) {
+      return res.status(403).json({ error: 'Forbidden: You do not own this meal.' });
+    }
+
+    if (!meal.is_archived) {
+      return res.status(400).json({ error: 'This meal is already active on your menu.' });
+    }
+
+    // Restore meal to active status
+    await db.update('meals', { id: meal.id }, {
+      is_archived: false,
+      is_available: true,
+      archived_at: null
+    });
+
+    const restoredMeal = await db.findOne('meals', { id: meal.id });
+
+    res.json({
+      message: `"${restoredMeal.name}" has been restored to your active kitchen menu.`,
+      meal: restoredMeal
+    });
+  } catch (err) {
+    console.error('Seller restore meal error:', err);
+    res.status(500).json({ error: 'Server error restoring meal.' });
+  }
+});
+
+// Customization options catalog for kitchen dish configuration
+router.get('/customization-options', async (req, res) => {
+  try {
+    const options = await db.find('customization_options');
+    options.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    res.json(options);
+  } catch (err) {
+    console.error('Seller customization options error:', err);
+    res.status(500).json({ error: 'Server error retrieving customization options.' });
   }
 });
 
@@ -509,31 +770,56 @@ router.put('/plans/:id', async (req, res) => {
 router.get('/earnings', async (req, res) => {
   try {
     const seller = req.seller;
-    const orders = await db.find('orders', { seller_id: seller.id });
-    const deliveredOrders = orders.filter(o => o.status === 'delivered');
+
+    // Qualifying eligible orders belonging to this seller (excluding demo seed test orders)
+    const orders = await db.find('orders', o => o.seller_id === seller.id && !o.id?.startsWith('ord_demo_'));
+    const deliveredOrders = orders.filter(o => o.status === 'delivered' && o.payment_status === 'paid');
 
     const orderRevenue = deliveredOrders.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0);
     const subscriptions = await db.find('subscriptions', { seller_id: seller.id });
-    const activeSubs = subscriptions.filter(s => s.status === 'active');
-    const completedSubs = subscriptions.filter(s => s.status === 'completed');
+    const activeSubs = subscriptions.filter(s => s.status === 'active' && s.payment_status === 'paid');
+    const completedSubs = subscriptions.filter(s => s.status === 'completed' && s.payment_status === 'paid');
 
     const subscriptionRevenue = [...activeSubs, ...completedSubs].reduce((sum, s) => sum + parseFloat(s.total_amount_paid || 0), 0);
-    const grossTotal = Math.round((orderRevenue + subscriptionRevenue) * 100) / 100;
+
+    // Subtract completed refunds for this seller's orders
+    const allOrderIds = new Set(orders.map(o => o.id));
+    const refunds = await db.find('refunds', r => allOrderIds.has(r.order_id) && r.status === 'completed');
+    const totalRefunds = refunds.reduce((sum, r) => sum + parseFloat(r.refund_amount || 0), 0);
+
+    // Today's earnings
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayDeliveredOrders = deliveredOrders.filter(o => o.created_at && o.created_at.startsWith(todayStr));
+    const todayOrdersRev = todayDeliveredOrders.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0);
+
+    const grossTotal = Math.max(0, Math.round((orderRevenue + subscriptionRevenue - totalRefunds) * 100) / 100);
     const platformCommissionPercent = 10;
-    const netPayout = Math.round((grossTotal * (1 - platformCommissionPercent / 100)) * 100) / 100;
+    const platformFee = Math.round(grossTotal * (platformCommissionPercent / 100) * 100) / 100;
+    const netPayout = Math.max(0, Math.round((grossTotal - platformFee) * 100) / 100);
+    const todayEarnings = Math.max(0, Math.round(todayOrdersRev * (1 - platformCommissionPercent / 100) * 100) / 100);
+
+    // Available Balance is the net payout ready for next scheduled disbursement
+    const availableBalance = netPayout;
+    const pendingPayouts = 0.00;
 
     res.json({
       seller_id: seller.id,
       business_name: seller.business_name,
       summary: {
         gross_revenue: grossTotal,
+        today_earnings: todayEarnings,
         net_payout: netPayout,
+        available_balance: availableBalance,
+        pending_payouts: pendingPayouts,
         platform_fee_percent: platformCommissionPercent,
+        platform_fee_amount: platformFee,
+        refunds_amount: Math.round(totalRefunds * 100) / 100,
         orders_revenue: Math.round(orderRevenue * 100) / 100,
         subscriptions_revenue: Math.round(subscriptionRevenue * 100) / 100,
         total_delivered_orders: deliveredOrders.length,
         total_active_subscriptions: activeSubs.length
       },
+      settlement_status: grossTotal > 0 ? 'On-schedule (Next cycle tomorrow 10:00 AM)' : 'No pending disbursements',
       recent_orders: deliveredOrders.slice(-5).reverse()
     });
   } catch (err) {

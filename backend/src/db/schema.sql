@@ -147,6 +147,8 @@ CREATE TABLE IF NOT EXISTS meals (
     is_available BOOLEAN NOT NULL DEFAULT TRUE,
     is_featured BOOLEAN NOT NULL DEFAULT FALSE,
     is_tiffin_eligible BOOLEAN NOT NULL DEFAULT TRUE,
+    is_archived BOOLEAN NOT NULL DEFAULT FALSE,
+    archived_at TIMESTAMP NULL,
     prep_time_minutes INT DEFAULT 25,
     calories INT NULL,
     protein_grams DECIMAL(5, 1) NULL,
@@ -161,7 +163,8 @@ CREATE TABLE IF NOT EXISTS meals (
     FOREIGN KEY (category_id) REFERENCES categories(id),
     INDEX idx_meals_seller (seller_id),
     INDEX idx_meals_category (category_id),
-    INDEX idx_meals_available (is_available)
+    INDEX idx_meals_available (is_available),
+    INDEX idx_meals_archived (is_archived)
 ) ENGINE=InnoDB;
 
 -- 9. Customization Options (Build Your Own Meal)

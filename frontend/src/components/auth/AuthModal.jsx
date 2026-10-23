@@ -51,9 +51,8 @@ export function AuthModal() {
 
     try {
       if (authModalMode === 'signin') {
-        await login(email, password, authAccountType, true /* hardcore hardcoded authentication */);
+        await login(email, password, authAccountType);
       } else {
-
         if (authAccountType === 'customer') {
           await registerCustomer({
             email,
@@ -82,14 +81,18 @@ export function AuthModal() {
     }
   };
 
-  const handleQuickDemoLogin = async (demoEmail, demoRole) => {
+  const handleDemoLogin = async () => {
     setError('');
     setLoading(true);
+    const isSellerDemo = authAccountType === 'seller';
+    const demoCredentials = isSellerDemo
+      ? { email: 'seller.tiffin@fitbite.demo', password: 'FitBite@2026', role: 'seller' }
+      : { email: 'customer@fitbite.demo', password: 'FitBite@2026', role: 'customer' };
+
     try {
-      const pwd = demoRole === 'admin' ? 'FitBite@Admin2026' : 'FitBite@123';
-      await login(demoEmail, pwd, demoRole === 'admin' ? 'admin' : demoRole, true /* instant hardcoded access */);
+      await login(demoCredentials.email, demoCredentials.password, demoCredentials.role);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Demo login is unavailable right now.');
     } finally {
       setLoading(false);
     }
@@ -123,23 +126,6 @@ export function AuthModal() {
         </div>
 
         <div style={{ padding: '24px' }}>
-          {/* Keyless Instant Access Notice */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#ECFDF5',
-            border: '1px solid #A7F3D0',
-            borderRadius: '8px',
-            padding: '8px 12px',
-            marginBottom: '16px',
-            fontSize: '0.8rem',
-            color: '#065F46',
-            fontWeight: 600
-          }}>
-            <span>⚡</span>
-            <span><b>Instant Hardcoded Access:</b> Zero API keys needed. Main systems open immediately.</span>
-          </div>
 
           {/* 1. Account Type Selector at the Top */}
           <div style={{
@@ -372,64 +358,31 @@ export function AuthModal() {
                 )
               )}
             </button>
-          </form>
 
-          {/* Quick Demo Logins for Fast Pair Programming & Review */}
-          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #E2E8F0' }}>
-            <p style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600, textTransform: 'uppercase', marginBottom: '10px' }}>
-              ⚡ 1-Click Demo Accounts (Fast Testing):
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('rahul@fitbite.demo', 'customer')}
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
-              >
-                👤 Customer (Rahul)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('family@fitbite.demo', 'customer')}
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
-              >
-                👨‍👩‍👧 Family Customer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('seller@fitbite.demo', 'seller')}
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
-              >
-                🍲 Tiffin Seller
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('kitchen@fitbite.demo', 'seller')}
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
-              >
-                🍳 Cloud Kitchen
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('admin@fitbite.demo', 'admin')}
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '0.8rem', justifyContent: 'flex-start', color: '#7C3AED' }}
-              >
-                🛡️ Platform Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('delivery@fitbite.demo', 'delivery_partner')}
-                className="btn btn-outline btn-sm"
-                style={{ fontSize: '0.8rem', justifyContent: 'flex-start' }}
-              >
-                🛵 Delivery Partner
-              </button>
-            </div>
-          </div>
+            {authModalMode === 'signin' && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '18px 0 12px', color: '#94A3B8', fontSize: '0.75rem' }}>
+                  <span style={{ height: '1px', flex: 1, background: '#E2E8F0' }} />
+                  or explore the app
+                  <span style={{ height: '1px', flex: 1, background: '#E2E8F0' }} />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDemoLogin}
+                  disabled={loading}
+                  className="btn btn-outline"
+                  style={{ width: '100%', padding: '11px', borderColor: authAccountType === 'seller' ? '#F97316' : '#10B981', color: authAccountType === 'seller' ? '#C2410C' : '#047857', fontWeight: 700 }}
+                >
+                  {loading ? 'Signing in…' : `Use ${authAccountType === 'seller' ? 'Partner' : 'Customer'} Demo Account`}
+                </button>
+                <p style={{ margin: '8px 0 0', color: '#64748B', fontSize: '0.75rem', textAlign: 'center' }}>
+                  {authAccountType === 'seller'
+                    ? 'Quick kitchen-partner login — no registration required.'
+                    : 'Quick customer login — no registration required.'}
+                </p>
+              </>
+            )}
+          </form>
         </div>
       </div>
     </div>

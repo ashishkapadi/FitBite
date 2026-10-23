@@ -126,6 +126,8 @@ export const STATIC_SCHEMA_METADATA = {
     is_available: { dataType: 'boolean' },
     is_featured: { dataType: 'boolean' },
     is_tiffin_eligible: { dataType: 'boolean' },
+    is_archived: { dataType: 'boolean' },
+    archived_at: { dataType: 'timestamp', precision: 0 },
     created_at: { dataType: 'timestamp', precision: 0 },
     updated_at: { dataType: 'timestamp', precision: 0 }
   },

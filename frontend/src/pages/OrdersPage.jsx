@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function OrdersPage() {
-  const { user, token, switchPersona } = useAuth();
+  const { user, token, openAuthModal } = useAuth();
   const { addToCart } = useCart();
   const navigate = useNavigate();
 
@@ -123,9 +123,9 @@ export default function OrdersPage() {
         <div style={{ textAlign: 'center', padding: '4rem 1rem', background: '#F9FAFB', borderRadius: '1rem', border: '1px solid #E5E7EB' }}>
           <ShoppingBag size={48} color="#10B981" style={{ margin: '0 auto 1rem' }} />
           <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827', margin: '0 0 0.5rem' }}>Customer Orders &amp; Live Tracking</h3>
-          <p style={{ color: '#6B7280', margin: '0 0 1.5rem' }}>Sign in with zero API keys to inspect live meal tracking, dispatch milestones, and tiffin orders.</p>
-          <button className="btn btn-primary" onClick={() => switchPersona('customer')}>
-            👤 1-Click View Demo Orders (Rahul)
+          <p style={{ color: '#6B7280', margin: '0 0 1.5rem' }}>Sign in to inspect live meal tracking, dispatch milestones, and tiffin orders.</p>
+          <button className="btn btn-primary" onClick={() => openAuthModal({ mode: 'signin', accountType: 'customer' })}>
+            Sign In to View Orders
           </button>
         </div>
       ) : filteredOrders.length === 0 ? (

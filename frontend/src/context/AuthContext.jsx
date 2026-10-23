@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { safeJson, apiFetch } from '../config/api';
 import {
-  getFallbackAuthSession,
   saveAuthSessionToStorage,
   getStoredAuthSession,
   clearStoredAuthSession
@@ -72,9 +71,11 @@ export function AuthProvider({ children }) {
             setIsOnboardingModalOpen(true);
           }
         } else if (res.status === 401) {
-          // Explicit token rejection from live server
           clearStoredAuthSession();
           setUser(null);
+          setCustomerProfile(null);
+          setSellerProfile(null);
+          setPreferences(null);
         }
       } catch (remoteErr) {
         // If remote server is sleeping/unreachable, retain the local cached session
@@ -98,96 +99,40 @@ export function AuthProvider({ children }) {
     setIsAuthModalOpen(false);
   };
 
-  const login = async (email, password, requested_role = 'customer', forceImmediateFallback = false) => {
-    const normEmail = (email || '').trim().toLowerCase();
-    const isDemoAccount = normEmail.endsWith('@fitbite.demo') || normEmail.includes('demo');
-
-    // Fast-path: If user requested 1-click demo login, authenticate immediately with hardcoded data
-    if (forceImmediateFallback || isDemoAccount) {
-      const fallbackData = getFallbackAuthSession(email, requested_role);
-      saveAuthSessionToStorage(fallbackData);
-      setUser(fallbackData.user);
-      setCustomerProfile(fallbackData.customerProfile);
-      setSellerProfile(fallbackData.sellerProfile);
-      setPreferences(fallbackData.preferences);
-
-      closeAuthModal();
-
-      if (fallbackData.user?.role === 'seller') {
-        navigate('/seller');
-      } else if (fallbackData.user?.role === 'admin') {
-        navigate('/admin');
-      } else if (fallbackData.user?.role === 'customer') {
-        if (!fallbackData.user.onboarding_completed) {
-          setIsOnboardingModalOpen(true);
-        } else if (intendedAction) {
-          try { intendedAction(); } catch (e) { console.error('Error resuming action:', e); }
-          setIntendedAction(null);
-        }
-      }
-      return fallbackData;
+  const login = async (email, password, requested_role = 'customer') => {
+    // Authenticate against server-side endpoint
+    const res = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      timeout: 8000,
+      body: JSON.stringify({ email, password, requested_role })
+    });
+    const data = await safeJson(res);
+    if (!res.ok) {
+      throw new Error(data.error || data.message || 'Failed to sign in.');
     }
 
-    // Standard login: Try remote API with short timeout, seamlessly fall back to hardcoded auth on failure
-    try {
-      const res = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        timeout: 5000,
-        body: JSON.stringify({ email, password, requested_role })
-      });
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to sign in.');
+    saveAuthSessionToStorage(data);
+    setUser(data.user);
+    setCustomerProfile(data.customerProfile);
+    setSellerProfile(data.sellerProfile);
+    setPreferences(data.preferences);
 
-      saveAuthSessionToStorage(data);
-      setUser(data.user);
-      setCustomerProfile(data.customerProfile);
-      setSellerProfile(data.sellerProfile);
-      setPreferences(data.preferences);
+    closeAuthModal();
 
-      closeAuthModal();
-
-      if (data.user?.role === 'seller') {
-        navigate('/seller');
-      } else if (data.user?.role === 'admin') {
-        navigate('/admin');
-      } else if (data.user?.role === 'customer') {
-        if (!data.user.onboarding_completed) {
-          setIsOnboardingModalOpen(true);
-        } else if (intendedAction) {
-          try { intendedAction(); } catch (e) { console.error('Error resuming intended action:', e); }
-          setIntendedAction(null);
-        }
+    if (data.user?.role === 'seller') {
+      navigate('/seller');
+    } else if (data.user?.role === 'admin') {
+      navigate('/admin');
+    } else if (data.user?.role === 'customer') {
+      if (!data.user.onboarding_completed) {
+        setIsOnboardingModalOpen(true);
+      } else if (intendedAction) {
+        try { intendedAction(); } catch (e) { console.error('Error resuming intended action:', e); }
+        setIntendedAction(null);
       }
-
-      return data;
-    } catch (err) {
-      console.warn('[AuthContext] Remote API unreachable or timed out. Engaging hardcoded authentication fallback:', err.message);
-
-      // Hardcoded offline session: Unlocks the requested system immediately without API key dependencies
-      const fallbackData = getFallbackAuthSession(email, requested_role);
-      saveAuthSessionToStorage(fallbackData);
-      setUser(fallbackData.user);
-      setCustomerProfile(fallbackData.customerProfile);
-      setSellerProfile(fallbackData.sellerProfile);
-      setPreferences(fallbackData.preferences);
-
-      closeAuthModal();
-
-      if (fallbackData.user?.role === 'seller') {
-        navigate('/seller');
-      } else if (fallbackData.user?.role === 'admin') {
-        navigate('/admin');
-      } else if (fallbackData.user?.role === 'customer') {
-        if (!fallbackData.user.onboarding_completed) {
-          setIsOnboardingModalOpen(true);
-        } else if (intendedAction) {
-          try { intendedAction(); } catch (e) { console.error('Error resuming intended action:', e); }
-          setIntendedAction(null);
-        }
-      }
-
-      return fallbackData;
     }
+
+    return data;
   };
 
   const registerCustomer = async (formData) => {
@@ -276,26 +221,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const switchPersona = async (role) => {
-    let email = 'rahul@fitbite.demo';
-    let pwd = 'FitBite@123';
-    let target = '/';
-    if (role === 'seller') {
-      email = 'seller@fitbite.demo';
-      target = '/seller';
-    } else if (role === 'admin') {
-      email = 'admin@fitbite.demo';
-      pwd = 'FitBite@Admin2026';
-      target = '/admin';
-    } else if (role === 'delivery') {
-      email = 'delivery@fitbite.demo';
-      target = '/';
-    }
-    const session = await login(email, pwd, role, true);
-    navigate(target);
-    return session;
-  };
-
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('fitbite_token') : null;
 
   return (
@@ -321,7 +246,6 @@ export function AuthProvider({ children }) {
         login,
         registerCustomer,
         registerSeller,
-        switchPersona,
         logout,
         fetchMe
       }}
